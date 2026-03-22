@@ -1,6 +1,6 @@
 # Team Workflow
 
-This is the lightweight workflow for DriftLens repository foundation.
+This is the lightweight workflow for StateSight collaboration.
 
 1. Create or pick a task issue.
 2. Create a branch from `main`.
