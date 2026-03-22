@@ -28,7 +28,7 @@ func (r *Repository) SeedBaselineData(ctx context.Context) (SeedResult, error) {
 
 	statements := []string{
 		fmt.Sprintf(`INSERT INTO workspaces (id, name) VALUES ('%s', 'StateSight Demo Workspace') ON CONFLICT (id) DO NOTHING`, result.WorkspaceID),
-		fmt.Sprintf(`INSERT INTO clusters (id, workspace_id, name, provider) VALUES ('%s', '%s', 'prod-eu-cluster', 'eks') ON CONFLICT (id) DO NOTHING`, result.ClusterID, result.WorkspaceID),
+		fmt.Sprintf(`INSERT INTO clusters (id, workspace_id, name, provider, kube_context, kubeconfig_path) VALUES ('%s', '%s', 'prod-eu-cluster', 'eks', '', '') ON CONFLICT (id) DO NOTHING`, result.ClusterID, result.WorkspaceID),
 		fmt.Sprintf(`INSERT INTO source_definitions (id, workspace_id, name, repo_url, default_branch, path) VALUES ('%s', '%s', 'platform-config', 'https://github.com/example/platform-config', 'main', 'clusters/prod') ON CONFLICT (id) DO NOTHING`, result.SourceID, result.WorkspaceID),
 		fmt.Sprintf(`INSERT INTO applications (id, workspace_id, cluster_id, source_definition_id, name, namespace, status) VALUES ('%s', '%s', '%s', '%s', 'ledger-api', 'payments', 'active') ON CONFLICT (id) DO NOTHING`, result.ApplicationOneID, result.WorkspaceID, result.ClusterID, result.SourceID),
 		fmt.Sprintf(`INSERT INTO applications (id, workspace_id, cluster_id, source_definition_id, name, namespace, status) VALUES ('%s', '%s', '%s', '%s', 'risk-engine', 'risk', 'active') ON CONFLICT (id) DO NOTHING`, result.ApplicationTwoID, result.WorkspaceID, result.ClusterID, result.SourceID),
