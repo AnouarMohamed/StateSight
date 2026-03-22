@@ -1,8 +1,8 @@
 # Project Overview
 
-## What DriftLens Is
+## What StateSight Is
 
-DriftLens is a GitOps forensic platform for Kubernetes.
+StateSight is a GitOps forensic platform for Kubernetes.
 
 It is designed to help teams understand drift between:
 
@@ -31,4 +31,4 @@ It is designed to help teams understand drift between:
 
 ## Current Stage
 
-Repository foundation only. Implementation will be added in later stages.
+Baseline scaffold in progress with API, worker, web, migrations, and seed flow.

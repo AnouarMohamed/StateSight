@@ -1,4 +1,4 @@
-# Contributing to DriftLens
+# Contributing to StateSight
 
 Thanks for contributing.
 

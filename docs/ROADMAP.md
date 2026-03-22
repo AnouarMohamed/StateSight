@@ -1,4 +1,4 @@
-# DriftLens Roadmap
+# StateSight Roadmap
 
 ## Stage 1: Repository Foundation (Current)
 

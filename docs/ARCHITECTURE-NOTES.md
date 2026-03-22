@@ -1,4 +1,4 @@
-# Architecture Notes (Early Draft)
+# StateSight Architecture Notes (Early Draft)
 
 This is a high-level direction, not a fixed final architecture.
 

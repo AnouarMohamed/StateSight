@@ -1,39 +1,131 @@
-# DriftLens
+# StateSight
 
-DriftLens is a GitOps forensic platform for Kubernetes.
+StateSight is a GitOps forensic platform for Kubernetes.
 
-## Current Status
+Its purpose is to compare desired state from Git with live cluster state, explain drift, group it into incidents, and recommend actions (`ignore`, `monitor`, `investigate`, `reconcile`).
 
-DriftLens is in the **planning / repository foundation** stage.
+StateSight is **not** a deployment controller and does not replace Argo CD or Flux.
 
-This repository currently focuses on:
+## What This Baseline Includes
 
-- clear project direction
-- collaboration conventions
-- lightweight structure for future implementation
+- Go API service with versioned routes, request IDs, structured JSON responses, health/readiness, and basic metrics.
+- Go worker service that consumes Redis queue jobs and writes deterministic analysis outputs to Postgres.
+- React + TypeScript + Vite + Tailwind web app with routed pages and API-backed data loading.
+- PostgreSQL migrations for core domain entities.
+- Seed workflow with realistic sample data.
+- Docker Compose local stack for Postgres, Redis, API, worker, and web.
+- Makefile commands for setup, migrate, seed, run, format, test, and docs checks.
 
-## Vision
+## Current Limitations (Intentional)
 
-DriftLens will help teams compare desired state from Git with live state in Kubernetes, explain drift clearly, and support safe, informed decisions.
+- Diffing is seeded mock logic, not full semantic diffing yet.
+- Kubernetes collection is placeholder (future client-go integration).
+- GitHub webhook endpoint is baseline-only (not full GitHub App install/auth flow).
+- No auto-remediation.
+- No Argo/Flux integrations yet.
 
-## What Comes Next
+## Auth and RBAC Baseline
 
-The next step is the baseline scaffold phase, where we add:
+API supports workspace-aware RBAC boundaries when `AUTH_REQUIRED=true`.
 
-- initial monorepo layout with runnable services
-- first API and worker skeletons
-- basic local development setup
-- initial domain model and migration groundwork
+Expected request headers in auth-enabled mode:
 
-## Project Docs
+- `X-User-ID`
+- `X-Workspace-ID`
+- `X-User-Email` (optional)
 
-- [CONTRIBUTING.md](CONTRIBUTING.md)
-- [docs/PROJECT-OVERVIEW.md](docs/PROJECT-OVERVIEW.md)
-- [docs/ROADMAP.md](docs/ROADMAP.md)
+Roles come from `workspace_memberships` (`viewer`, `editor`, `admin`).
+
+## Architecture Overview
+
+High-level structure:
+
+- `apps/api`: HTTP API service
+- `apps/worker`: async job processor
+- `apps/web`: frontend app
+- `internal/*`: service internals and pipeline boundaries
+- `pkg/*`: reusable domain/model utilities
+- `migrations/`: SQL schema migrations
+- `scripts/migrate`, `scripts/seed`: operational bootstrap commands
+
+Detailed notes:
+
+- [docs/architecture/overview.md](docs/architecture/overview.md)
 - [docs/ARCHITECTURE-NOTES.md](docs/ARCHITECTURE-NOTES.md)
-- [docs/WORKFLOW.md](docs/WORKFLOW.md)
-- [docs/DECISIONS.md](docs/DECISIONS.md)
 
-## Repository Note
+## Local Setup
 
-This is intentionally a small, clean starting point. Real implementation code is not included yet by design.
+### 1) Prerequisites
+
+- Go 1.23+
+- Node 20+
+- Docker + Docker Compose
+
+### 2) Environment
+
+```bash
+cp .env.example .env
+cp apps/web/.env.example apps/web/.env
+```
+
+### 3) Start Infrastructure + Services
+
+```bash
+docker compose up --build -d
+```
+
+### 4) Run Migrations
+
+```bash
+make migrate-up
+```
+
+### 5) Seed Sample Data
+
+```bash
+make seed
+```
+
+### 6) Run Services Locally (optional alternative to containerized app services)
+
+```bash
+make api
+make worker
+make web
+```
+
+## Make Commands
+
+- `make help`
+- `make setup`
+- `make up`
+- `make down`
+- `make migrate-up`
+- `make seed`
+- `make api`
+- `make worker`
+- `make web`
+- `make fmt`
+- `make test`
+- `make lint`
+- `make docs-check`
+
+## Required API Endpoints in This Baseline
+
+- `GET /healthz`
+- `GET /readyz`
+- `GET /api/v1/overview`
+- `GET /api/v1/applications`
+- `POST /api/v1/applications`
+- `GET /api/v1/applications/:id`
+- `POST /api/v1/applications/:id/analyze`
+- `GET /api/v1/incidents/:id`
+- `POST /api/v1/github/webhook`
+
+## Next Suggested Implementation Steps
+
+1. Replace seeded diff logic with first real resource-normalized semantic diffing.
+2. Add real desired-state ingestion from Git source definitions.
+3. Add real live-state collection adapters for Kubernetes clusters.
+4. Expand incident grouping and timeline construction logic.
+5. Add authentication, workspace RBAC, and multi-tenant access control.
