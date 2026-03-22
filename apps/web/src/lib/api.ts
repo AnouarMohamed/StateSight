@@ -1,4 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+const USER_ID = import.meta.env.VITE_USER_ID ?? "";
+const WORKSPACE_ID = import.meta.env.VITE_WORKSPACE_ID ?? "";
+const USER_EMAIL = import.meta.env.VITE_USER_EMAIL ?? "";
 
 type ApiEnvelope<T> = {
   success: boolean;
@@ -85,10 +88,22 @@ export type TimelineEvent = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const authHeaders: Record<string, string> = {};
+  if (USER_ID.length > 0) {
+    authHeaders["X-User-ID"] = USER_ID;
+  }
+  if (WORKSPACE_ID.length > 0) {
+    authHeaders["X-Workspace-ID"] = WORKSPACE_ID;
+  }
+  if (USER_EMAIL.length > 0) {
+    authHeaders["X-User-Email"] = USER_EMAIL;
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders,
       ...(init?.headers ?? {})
     }
   });

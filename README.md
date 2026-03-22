@@ -24,6 +24,18 @@ StateSight is **not** a deployment controller and does not replace Argo CD or Fl
 - No auto-remediation.
 - No Argo/Flux integrations yet.
 
+## Auth and RBAC Baseline
+
+API supports workspace-aware RBAC boundaries when `AUTH_REQUIRED=true`.
+
+Expected request headers in auth-enabled mode:
+
+- `X-User-ID`
+- `X-Workspace-ID`
+- `X-User-Email` (optional)
+
+Roles come from `workspace_memberships` (`viewer`, `editor`, `admin`).
+
 ## Architecture Overview
 
 High-level structure:

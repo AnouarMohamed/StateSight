@@ -47,7 +47,7 @@ func run() error {
 	defer queue.Close()
 
 	store := storage.NewRepository(pool)
-	server := apihttp.NewServer(store, queue, logger, cfg.GitHubWebhookSecret)
+	server := apihttp.NewServer(store, queue, logger, cfg.GitHubWebhookSecret, cfg.AuthRequired)
 
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPPort),

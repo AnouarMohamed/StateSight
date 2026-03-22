@@ -43,6 +43,40 @@ func (r *Repository) ListApplications(ctx context.Context) ([]model.Application,
 	return apps, nil
 }
 
+func (r *Repository) ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]model.Application, error) {
+	const query = `
+		SELECT id, workspace_id, cluster_id, source_definition_id, name, namespace, status, created_at, updated_at
+		FROM applications
+		WHERE workspace_id = $1
+		ORDER BY name ASC
+	`
+	rows, err := r.pool.Query(ctx, query, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list applications by workspace: %w", err)
+	}
+	defer rows.Close()
+
+	apps, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (model.Application, error) {
+		var app model.Application
+		err := row.Scan(
+			&app.ID,
+			&app.WorkspaceID,
+			&app.ClusterID,
+			&app.SourceDefinitionID,
+			&app.Name,
+			&app.Namespace,
+			&app.Status,
+			&app.CreatedAt,
+			&app.UpdatedAt,
+		)
+		return app, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scan applications by workspace: %w", err)
+	}
+	return apps, nil
+}
+
 func (r *Repository) CreateApplication(ctx context.Context, params CreateApplicationParams) (model.Application, error) {
 	const query = `
 		INSERT INTO applications (id, workspace_id, cluster_id, source_definition_id, name, namespace, status)

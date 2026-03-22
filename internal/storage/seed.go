@@ -28,6 +28,8 @@ func (r *Repository) SeedBaselineData(ctx context.Context) (SeedResult, error) {
 
 	statements := []string{
 		fmt.Sprintf(`INSERT INTO workspaces (id, name) VALUES ('%s', 'StateSight Demo Workspace') ON CONFLICT (id) DO NOTHING`, result.WorkspaceID),
+		`INSERT INTO users (id, email, display_name) VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'demo.admin@statesight.local', 'StateSight Demo Admin') ON CONFLICT (id) DO NOTHING`,
+		fmt.Sprintf(`INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('%s', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'admin') ON CONFLICT (workspace_id, user_id) DO NOTHING`, result.WorkspaceID),
 		fmt.Sprintf(`INSERT INTO clusters (id, workspace_id, name, provider, kube_context, kubeconfig_path) VALUES ('%s', '%s', 'prod-eu-cluster', 'eks', '', '') ON CONFLICT (id) DO NOTHING`, result.ClusterID, result.WorkspaceID),
 		fmt.Sprintf(`INSERT INTO source_definitions (id, workspace_id, name, repo_url, default_branch, path) VALUES ('%s', '%s', 'platform-config', 'https://github.com/example/platform-config', 'main', 'clusters/prod') ON CONFLICT (id) DO NOTHING`, result.SourceID, result.WorkspaceID),
 		fmt.Sprintf(`INSERT INTO applications (id, workspace_id, cluster_id, source_definition_id, name, namespace, status) VALUES ('%s', '%s', '%s', '%s', 'ledger-api', 'payments', 'active') ON CONFLICT (id) DO NOTHING`, result.ApplicationOneID, result.WorkspaceID, result.ClusterID, result.SourceID),

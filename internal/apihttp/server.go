@@ -3,6 +3,7 @@ package apihttp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/AnouarMohamed/StateSight/internal/auth"
 	"github.com/AnouarMohamed/StateSight/internal/jobs"
 	"github.com/AnouarMohamed/StateSight/internal/render"
 	"github.com/AnouarMohamed/StateSight/internal/storage"
@@ -22,7 +24,9 @@ import (
 type Store interface {
 	Ping(ctx context.Context) error
 	GetOverview(ctx context.Context) (model.Overview, error)
+	GetOverviewByWorkspace(ctx context.Context, workspaceID string) (model.Overview, error)
 	ListApplications(ctx context.Context) ([]model.Application, error)
+	ListApplicationsByWorkspace(ctx context.Context, workspaceID string) ([]model.Application, error)
 	CreateApplication(ctx context.Context, params storage.CreateApplicationParams) (model.Application, error)
 	GetApplicationByID(ctx context.Context, id string) (model.Application, error)
 	ListIncidentsByApplication(ctx context.Context, applicationID string) ([]model.DriftIncident, error)
@@ -30,6 +34,7 @@ type Store interface {
 	MarkJobFailed(ctx context.Context, id, message string) error
 	GetIncidentDetails(ctx context.Context, id string) (model.IncidentDetails, error)
 	GetIncidentTimeline(ctx context.Context, incidentID string) ([]model.TimelineEvent, error)
+	GetWorkspaceRole(ctx context.Context, userID, workspaceID string) (string, error)
 }
 
 type JobQueue interface {
@@ -43,15 +48,17 @@ type Server struct {
 	logger        *slog.Logger
 	webhookSecret string
 	metrics       *metrics
+	authRequired  bool
 }
 
-func NewServer(store Store, queue JobQueue, logger *slog.Logger, webhookSecret string) *Server {
+func NewServer(store Store, queue JobQueue, logger *slog.Logger, webhookSecret string, authRequired bool) *Server {
 	return &Server{
 		store:         store,
 		queue:         queue,
 		logger:        logger,
 		webhookSecret: webhookSecret,
 		metrics:       &metrics{},
+		authRequired:  authRequired,
 	}
 }
 
@@ -101,7 +108,25 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
-	overview, err := s.store.GetOverview(r.Context())
+	var (
+		overview model.Overview
+		err      error
+	)
+
+	if s.authRequired {
+		principal, authErr := auth.PrincipalFromRequest(r)
+		if authErr != nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing required authentication headers", s.responseMeta(r))
+			return
+		}
+		if !s.authorizeWorkspace(w, r, principal.WorkspaceID, auth.RoleViewer) {
+			return
+		}
+		overview, err = s.store.GetOverviewByWorkspace(r.Context(), principal.WorkspaceID)
+	} else {
+		overview, err = s.store.GetOverview(r.Context())
+	}
+
 	if err != nil {
 		s.logger.Error("overview query failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
 		writeError(w, http.StatusInternalServerError, "overview_query_failed", "failed to load overview", s.responseMeta(r))
@@ -111,7 +136,25 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListApplications(w http.ResponseWriter, r *http.Request) {
-	apps, err := s.store.ListApplications(r.Context())
+	var (
+		apps []model.Application
+		err  error
+	)
+
+	if s.authRequired {
+		principal, authErr := auth.PrincipalFromRequest(r)
+		if authErr != nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing required authentication headers", s.responseMeta(r))
+			return
+		}
+		if !s.authorizeWorkspace(w, r, principal.WorkspaceID, auth.RoleViewer) {
+			return
+		}
+		apps, err = s.store.ListApplicationsByWorkspace(r.Context(), principal.WorkspaceID)
+	} else {
+		apps, err = s.store.ListApplications(r.Context())
+	}
+
 	if err != nil {
 		s.logger.Error("list applications failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
 		writeError(w, http.StatusInternalServerError, "applications_query_failed", "failed to load applications", s.responseMeta(r))
@@ -130,6 +173,9 @@ func (s *Server) handleCreateApplication(w http.ResponseWriter, r *http.Request)
 	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Namespace) == "" ||
 		strings.TrimSpace(req.WorkspaceID) == "" || strings.TrimSpace(req.ClusterID) == "" || strings.TrimSpace(req.SourceDefinitionID) == "" {
 		writeError(w, http.StatusBadRequest, "missing_fields", "workspace_id, cluster_id, source_definition_id, name, and namespace are required", s.responseMeta(r))
+		return
+	}
+	if !s.authorizeWorkspace(w, r, req.WorkspaceID, auth.RoleEditor) {
 		return
 	}
 
@@ -160,6 +206,9 @@ func (s *Server) handleGetApplication(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "application_query_failed", "failed to load application", s.responseMeta(r))
 		return
 	}
+	if !s.authorizeWorkspace(w, r, app.WorkspaceID, auth.RoleViewer) {
+		return
+	}
 
 	incidents, err := s.store.ListIncidentsByApplication(r.Context(), app.ID)
 	if err != nil {
@@ -184,6 +233,9 @@ func (s *Server) handleAnalyzeApplication(w http.ResponseWriter, r *http.Request
 		}
 		s.logger.Error("lookup application for analyze failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
 		writeError(w, http.StatusInternalServerError, "application_query_failed", "failed to load application", s.responseMeta(r))
+		return
+	}
+	if !s.authorizeWorkspace(w, r, app.WorkspaceID, auth.RoleEditor) {
 		return
 	}
 
@@ -246,12 +298,41 @@ func (s *Server) handleGetIncident(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "incident_query_failed", "failed to load incident", s.responseMeta(r))
 		return
 	}
+	app, err := s.store.GetApplicationByID(r.Context(), details.Incident.ApplicationID)
+	if err != nil {
+		s.logger.Error("incident application lookup failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "incident_application_query_failed", "failed to authorize incident workspace", s.responseMeta(r))
+		return
+	}
+	if !s.authorizeWorkspace(w, r, app.WorkspaceID, auth.RoleViewer) {
+		return
+	}
 
 	writeSuccess(w, http.StatusOK, details, s.responseMeta(r))
 }
 
 func (s *Server) handleGetIncidentTimeline(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	details, err := s.store.GetIncidentDetails(r.Context(), id)
+	if err != nil {
+		if err == storage.ErrNotFound {
+			writeError(w, http.StatusNotFound, "incident_not_found", "incident was not found", s.responseMeta(r))
+			return
+		}
+		s.logger.Error("get incident for timeline failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "incident_query_failed", "failed to load incident", s.responseMeta(r))
+		return
+	}
+	app, err := s.store.GetApplicationByID(r.Context(), details.Incident.ApplicationID)
+	if err != nil {
+		s.logger.Error("incident application lookup failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "incident_application_query_failed", "failed to authorize incident workspace", s.responseMeta(r))
+		return
+	}
+	if !s.authorizeWorkspace(w, r, app.WorkspaceID, auth.RoleViewer) {
+		return
+	}
+
 	timeline, err := s.store.GetIncidentTimeline(r.Context(), id)
 	if err != nil {
 		if err == storage.ErrNotFound {
@@ -319,6 +400,46 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		"job_type": job.JobType,
 		"status":   job.Status,
 	}, s.responseMeta(r))
+}
+
+func (s *Server) authorizeWorkspace(w http.ResponseWriter, r *http.Request, workspaceID, requiredRole string) bool {
+	if !s.authRequired {
+		return true
+	}
+
+	principal, err := auth.PrincipalFromRequest(r)
+	if err != nil {
+		code := "unauthorized"
+		message := "missing required authentication headers"
+		if errors.Is(err, auth.ErrMissingWorkspaceID) {
+			message = "missing X-Workspace-ID header"
+		}
+		writeError(w, http.StatusUnauthorized, code, message, s.responseMeta(r))
+		return false
+	}
+
+	if strings.TrimSpace(workspaceID) == "" || workspaceID != principal.WorkspaceID {
+		writeError(w, http.StatusForbidden, "workspace_forbidden", "workspace access denied", s.responseMeta(r))
+		return false
+	}
+
+	role, err := s.store.GetWorkspaceRole(r.Context(), principal.UserID, workspaceID)
+	if err != nil {
+		if err == storage.ErrNotFound {
+			writeError(w, http.StatusForbidden, "workspace_forbidden", "workspace membership not found", s.responseMeta(r))
+			return false
+		}
+		s.logger.Error("workspace role lookup failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "workspace_auth_failed", "failed to evaluate workspace role", s.responseMeta(r))
+		return false
+	}
+
+	if !auth.HasRequiredRole(role, requiredRole) {
+		writeError(w, http.StatusForbidden, "insufficient_role", "role does not permit this action", s.responseMeta(r))
+		return false
+	}
+
+	return true
 }
 
 func (s *Server) responseMeta(r *http.Request) map[string]any {

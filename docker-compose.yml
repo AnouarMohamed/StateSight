@@ -41,6 +41,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       GITHUB_WEBHOOK_SECRET: dev-secret
       LOG_LEVEL: info
+      AUTH_REQUIRED: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,6 +60,9 @@ services:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/statesight?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: info
+      GIT_BIN: git
+      GIT_CACHE_DIR: /tmp/statesight/git-cache
+      KUBECTL_BIN: kubectl
     depends_on:
       postgres:
         condition: service_healthy

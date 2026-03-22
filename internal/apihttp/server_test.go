@@ -15,9 +15,15 @@ import (
 
 type mockStore struct{}
 
-func (m mockStore) Ping(context.Context) error                                    { return nil }
-func (m mockStore) GetOverview(context.Context) (model.Overview, error)           { return model.Overview{}, nil }
+func (m mockStore) Ping(context.Context) error                          { return nil }
+func (m mockStore) GetOverview(context.Context) (model.Overview, error) { return model.Overview{}, nil }
+func (m mockStore) GetOverviewByWorkspace(context.Context, string) (model.Overview, error) {
+	return model.Overview{}, nil
+}
 func (m mockStore) ListApplications(context.Context) ([]model.Application, error) { return nil, nil }
+func (m mockStore) ListApplicationsByWorkspace(context.Context, string) ([]model.Application, error) {
+	return nil, nil
+}
 func (m mockStore) CreateApplication(context.Context, storage.CreateApplicationParams) (model.Application, error) {
 	return model.Application{}, nil
 }
@@ -37,6 +43,9 @@ func (m mockStore) GetIncidentDetails(context.Context, string) (model.IncidentDe
 func (m mockStore) GetIncidentTimeline(context.Context, string) ([]model.TimelineEvent, error) {
 	return nil, storage.ErrNotFound
 }
+func (m mockStore) GetWorkspaceRole(context.Context, string, string) (string, error) {
+	return "admin", nil
+}
 
 type mockQueue struct{}
 
@@ -44,7 +53,7 @@ func (q mockQueue) Enqueue(context.Context, jobs.Message) error { return nil }
 func (q mockQueue) Ping(context.Context) error                  { return nil }
 
 func TestHealthz(t *testing.T) {
-	s := NewServer(mockStore{}, mockQueue{}, slog.Default(), "")
+	s := NewServer(mockStore{}, mockQueue{}, slog.Default(), "", false)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
