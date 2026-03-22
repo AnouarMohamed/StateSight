@@ -53,7 +53,7 @@ func NewProcessor(store Store, logger *slog.Logger) *Processor {
 		fetcher:         sourceingest.NewGitFetcher("git", ".statesight/git-cache"),
 		collector:       k8scollect.NewCollector(k8scollect.CollectorOptions{}),
 		normalizer:      normalize.PassThroughNormalizer{},
-		diffEngine:      diff.SeededEngine{},
+		diffEngine:      diff.SemanticEngine{},
 		grouper:         incidents.SimpleGrouper{},
 		attributor:      evidence.MockAttributor{},
 		recommendation:  scoring.RuleBasedRecommendation{},
@@ -128,14 +128,14 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 		return fmt.Errorf("collect live state: %w", err)
 	}
 
-	normalizedDesired := p.normalizer.Normalize(desiredState.Summary)
-	normalizedLive := p.normalizer.Normalize(liveState.Summary)
+	normalizedDesired := p.normalizer.Normalize(desiredState.Resources)
+	normalizedLive := p.normalizer.Normalize(liveState.Resources)
 
-	desiredJSON, err := render.JSON(normalizedDesired.Body)
+	desiredJSON, err := render.JSON(normalizedDesired)
 	if err != nil {
 		return fmt.Errorf("render desired snapshot: %w", err)
 	}
-	liveJSON, err := render.JSON(normalizedLive.Body)
+	liveJSON, err := render.JSON(normalizedLive)
 	if err != nil {
 		return fmt.Errorf("render live snapshot: %w", err)
 	}
