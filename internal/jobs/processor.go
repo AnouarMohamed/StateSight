@@ -24,6 +24,7 @@ type Store interface {
 	MarkJobCompleted(ctx context.Context, id string) error
 	MarkJobFailed(ctx context.Context, id, message string) error
 	GetApplicationByID(ctx context.Context, id string) (model.Application, error)
+	GetSourceDefinitionByID(ctx context.Context, id string) (model.SourceDefinition, error)
 	CreateDesiredSnapshot(ctx context.Context, params storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error)
 	CreateLiveSnapshot(ctx context.Context, params storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error)
 	CreateIncident(ctx context.Context, params storage.CreateIncidentParams) (model.DriftIncident, error)
@@ -48,7 +49,7 @@ type Processor struct {
 func NewProcessor(store Store, logger *slog.Logger) *Processor {
 	return &Processor{
 		store:           store,
-		fetcher:         sourceingest.MockFetcher{},
+		fetcher:         sourceingest.NewGitFetcher("git", ".statesight/git-cache"),
 		collector:       k8scollect.MockCollector{},
 		normalizer:      normalize.PassThroughNormalizer{},
 		diffEngine:      diff.SeededEngine{},
@@ -108,7 +109,12 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 		return fmt.Errorf("load application: %w", err)
 	}
 
-	desiredState, err := p.fetcher.FetchDesired(ctx, app)
+	source, err := p.store.GetSourceDefinitionByID(ctx, app.SourceDefinitionID)
+	if err != nil {
+		return fmt.Errorf("load source definition: %w", err)
+	}
+
+	desiredState, err := p.fetcher.FetchDesired(ctx, app, source)
 	if err != nil {
 		return fmt.Errorf("fetch desired state: %w", err)
 	}
