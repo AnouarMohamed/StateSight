@@ -75,6 +75,13 @@ export type IncidentDetails = {
   incident: Incident;
   fields: DriftField[];
   evidence: EvidenceRecord[];
+  timeline: TimelineEvent[];
+};
+
+export type TimelineEvent = {
+  at: string;
+  type: string;
+  summary: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -114,4 +121,8 @@ export function analyzeApplication(id: string) {
 
 export function getIncident(id: string) {
   return request<IncidentDetails>(`/api/v1/incidents/${id}`);
+}
+
+export function getIncidentTimeline(id: string) {
+  return request<TimelineEvent[]>(`/api/v1/incidents/${id}/timeline`);
 }

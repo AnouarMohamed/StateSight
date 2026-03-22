@@ -75,6 +75,23 @@ export function IncidentDetailPage() {
           </div>
         </article>
       </div>
+
+      <article className="rounded-xl border border-ops-border bg-ops-panel p-5 shadow-panel">
+        <h2 className="text-lg font-semibold">Timeline</h2>
+        <div className="mt-3 space-y-3">
+          {data.timeline.length === 0 ? (
+            <p className="text-sm text-ops-muted">No timeline events available.</p>
+          ) : (
+            data.timeline.map((event, index) => (
+              <div key={`${event.at}-${event.type}-${index}`} className="rounded-lg border border-ops-border bg-[#101825] p-3">
+                <p className="text-xs uppercase tracking-wide text-ops-muted">{event.type}</p>
+                <p className="mt-1 text-sm">{event.summary}</p>
+                <p className="mt-2 text-xs text-ops-muted">{new Date(event.at).toLocaleString()}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </article>
     </section>
   );
 }

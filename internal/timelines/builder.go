@@ -1,31 +1,34 @@
 package timelines
 
 import (
-	"context"
-	"time"
+	"sort"
+
+	"github.com/AnouarMohamed/StateSight/pkg/model"
 )
 
-// Event is a placeholder timeline event record.
-type Event struct {
-	At      time.Time `json:"at"`
-	Type    string    `json:"type"`
-	Summary string    `json:"summary"`
-}
-
-// Builder defines timeline construction boundaries.
+// Builder assembles and normalizes timeline events.
 type Builder interface {
-	Build(ctx context.Context, incidentID string) ([]Event, error)
+	Build(events []model.TimelineEvent) []model.TimelineEvent
 }
 
-// PlaceholderBuilder returns a minimal TODO timeline.
-type PlaceholderBuilder struct{}
+type DefaultBuilder struct{}
 
-func (PlaceholderBuilder) Build(_ context.Context, _ string) ([]Event, error) {
-	return []Event{
-		{
-			At:      time.Now().UTC(),
-			Type:    "todo",
-			Summary: "Timeline construction will include git commits, cluster events, and reconciliations.",
-		},
-	}, nil
+func (DefaultBuilder) Build(events []model.TimelineEvent) []model.TimelineEvent {
+	sorted := make([]model.TimelineEvent, 0, len(events))
+	sorted = append(sorted, events...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].At.Before(sorted[j].At)
+	})
+
+	out := make([]model.TimelineEvent, 0, len(sorted))
+	var prev *model.TimelineEvent
+	for i := range sorted {
+		event := sorted[i]
+		if prev != nil && prev.At.Equal(event.At) && prev.Type == event.Type && prev.Summary == event.Summary {
+			continue
+		}
+		out = append(out, event)
+		prev = &out[len(out)-1]
+	}
+	return out
 }

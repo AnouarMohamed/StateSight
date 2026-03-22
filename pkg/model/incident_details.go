@@ -5,4 +5,5 @@ type IncidentDetails struct {
 	Incident DriftIncident    `json:"incident"`
 	Fields   []DriftField     `json:"fields"`
 	Evidence []EvidenceRecord `json:"evidence"`
+	Timeline []TimelineEvent  `json:"timeline"`
 }

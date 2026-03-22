@@ -29,6 +29,7 @@ type Store interface {
 	CreateJob(ctx context.Context, params storage.CreateJobParams) (model.Job, error)
 	MarkJobFailed(ctx context.Context, id, message string) error
 	GetIncidentDetails(ctx context.Context, id string) (model.IncidentDetails, error)
+	GetIncidentTimeline(ctx context.Context, incidentID string) ([]model.TimelineEvent, error)
 }
 
 type JobQueue interface {
@@ -72,6 +73,7 @@ func (s *Server) Router() http.Handler {
 		v1.Get("/applications/{id}", s.handleGetApplication)
 		v1.Post("/applications/{id}/analyze", s.handleAnalyzeApplication)
 		v1.Get("/incidents/{id}", s.handleGetIncident)
+		v1.Get("/incidents/{id}/timeline", s.handleGetIncidentTimeline)
 		v1.Post("/github/webhook", s.handleGitHubWebhook)
 	})
 
@@ -246,6 +248,21 @@ func (s *Server) handleGetIncident(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSuccess(w, http.StatusOK, details, s.responseMeta(r))
+}
+
+func (s *Server) handleGetIncidentTimeline(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	timeline, err := s.store.GetIncidentTimeline(r.Context(), id)
+	if err != nil {
+		if err == storage.ErrNotFound {
+			writeError(w, http.StatusNotFound, "incident_not_found", "incident was not found", s.responseMeta(r))
+			return
+		}
+		s.logger.Error("get incident timeline failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "incident_timeline_query_failed", "failed to load incident timeline", s.responseMeta(r))
+		return
+	}
+	writeSuccess(w, http.StatusOK, timeline, s.responseMeta(r))
 }
 
 func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {

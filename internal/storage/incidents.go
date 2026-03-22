@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AnouarMohamed/StateSight/internal/timelines"
 	"github.com/AnouarMohamed/StateSight/pkg/model"
 )
 
@@ -160,7 +161,29 @@ func (r *Repository) GetIncidentDetails(ctx context.Context, id string) (model.I
 	}
 	details.Evidence = evidence
 
+	timeline, err := r.listTimelineByIncident(ctx, id)
+	if err != nil {
+		return model.IncidentDetails{}, err
+	}
+	details.Timeline = timeline
+
 	return details, nil
+}
+
+func (r *Repository) GetIncidentTimeline(ctx context.Context, incidentID string) ([]model.TimelineEvent, error) {
+	var exists bool
+	if err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM drift_incidents WHERE id = $1)`, incidentID).Scan(&exists); err != nil {
+		return nil, fmt.Errorf("check incident existence: %w", err)
+	}
+	if !exists {
+		return nil, ErrNotFound
+	}
+
+	events, err := r.listTimelineByIncident(ctx, incidentID)
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
 }
 
 func (r *Repository) listDriftFieldsByIncident(ctx context.Context, incidentID string) ([]model.DriftField, error) {
@@ -227,4 +250,71 @@ func (r *Repository) listEvidenceByIncident(ctx context.Context, incidentID stri
 		return nil, fmt.Errorf("collect evidence records: %w", err)
 	}
 	return records, nil
+}
+
+func (r *Repository) listTimelineByIncident(ctx context.Context, incidentID string) ([]model.TimelineEvent, error) {
+	const query = `
+		WITH incident_base AS (
+			SELECT id, application_id, desired_snapshot_id, live_snapshot_id, title, created_at
+			FROM drift_incidents
+			WHERE id = $1
+		),
+		incident_events AS (
+			SELECT ib.created_at AS at, 'incident_opened'::text AS type, ib.title::text AS summary
+			FROM incident_base ib
+		),
+		desired_events AS (
+			SELECT ds.captured_at AS at, 'desired_snapshot'::text AS type,
+			       ('Desired snapshot captured (revision ' || ds.revision || ')')::text AS summary
+			FROM incident_base ib
+			JOIN desired_snapshots ds ON ds.id = ib.desired_snapshot_id
+		),
+		live_events AS (
+			SELECT ls.observed_at AS at, 'live_snapshot'::text AS type,
+			       'Live snapshot collected from cluster'::text AS summary
+			FROM incident_base ib
+			JOIN live_snapshots ls ON ls.id = ib.live_snapshot_id
+		),
+		job_events AS (
+			SELECT j.created_at AS at, 'analysis_job'::text AS type,
+			       ('Analyze job ' || j.status)::text AS summary
+			FROM incident_base ib
+			JOIN jobs j ON j.application_id = ib.application_id
+			WHERE j.job_type = 'analyze_application'
+		),
+		github_events_timeline AS (
+			SELECT ge.received_at AS at, 'github_event'::text AS type,
+			       ('GitHub event ' || ge.event_type || COALESCE(' / ' || ge.action, ''))::text AS summary
+			FROM incident_base ib
+			JOIN github_events ge ON ge.received_at BETWEEN ib.created_at - INTERVAL '48 hours' AND ib.created_at + INTERVAL '48 hours'
+		)
+		SELECT at, type, summary FROM incident_events
+		UNION ALL
+		SELECT at, type, summary FROM desired_events
+		UNION ALL
+		SELECT at, type, summary FROM live_events
+		UNION ALL
+		SELECT at, type, summary FROM job_events
+		UNION ALL
+		SELECT at, type, summary FROM github_events_timeline
+		ORDER BY at ASC
+		LIMIT 100
+	`
+
+	rows, err := r.pool.Query(ctx, query, incidentID)
+	if err != nil {
+		return nil, fmt.Errorf("query incident timeline: %w", err)
+	}
+	defer rows.Close()
+
+	events, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (model.TimelineEvent, error) {
+		var event model.TimelineEvent
+		err := row.Scan(&event.At, &event.Type, &event.Summary)
+		return event, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("collect incident timeline: %w", err)
+	}
+
+	return timelines.DefaultBuilder{}.Build(events), nil
 }

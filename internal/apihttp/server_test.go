@@ -34,6 +34,9 @@ func (m mockStore) MarkJobFailed(context.Context, string, string) error { return
 func (m mockStore) GetIncidentDetails(context.Context, string) (model.IncidentDetails, error) {
 	return model.IncidentDetails{}, storage.ErrNotFound
 }
+func (m mockStore) GetIncidentTimeline(context.Context, string) ([]model.TimelineEvent, error) {
+	return nil, storage.ErrNotFound
+}
 
 type mockQueue struct{}
 
