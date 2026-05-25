@@ -16,12 +16,13 @@
 - pass worker runtime configuration to source and cluster adapters
 - execute active workspace ignore rules for exact drift field-path matches
 - persist and surface audit records for suppressed findings
+- manage application-scoped ignore rules with optional exact resource matching
 - establish CI and focused tests for critical analysis boundaries
 
 ## Next: Trustworthy Analysis
 
 - replace placeholder evidence attribution with real provenance signals
-- add ignore-rule management APIs/UI and richer application/resource-specific match scopes
+- extend ignore-rule administration with edit/delete flows and deliberate workspace-wide controls
 - improve incident grouping and semantic normalization/diff coverage
 - replace trusted request headers with a real authentication integration
 

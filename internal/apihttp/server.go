@@ -31,6 +31,9 @@ type Store interface {
 	GetApplicationByID(ctx context.Context, id string) (model.Application, error)
 	ListIncidentsByApplication(ctx context.Context, applicationID string) ([]model.DriftIncident, error)
 	ListSuppressedFindingsByApplication(ctx context.Context, applicationID string) ([]model.SuppressedFinding, error)
+	ListIgnoreRulesForApplication(ctx context.Context, workspaceID, applicationID string) ([]model.IgnoreRule, error)
+	CreateIgnoreRule(ctx context.Context, params storage.CreateIgnoreRuleParams) (model.IgnoreRule, error)
+	SetIgnoreRuleActiveForApplication(ctx context.Context, id, applicationID string, active bool) (model.IgnoreRule, error)
 	CreateJob(ctx context.Context, params storage.CreateJobParams) (model.Job, error)
 	MarkJobFailed(ctx context.Context, id, message string) error
 	GetIncidentDetails(ctx context.Context, id string) (model.IncidentDetails, error)
@@ -80,6 +83,8 @@ func (s *Server) Router() http.Handler {
 		v1.Post("/applications", s.handleCreateApplication)
 		v1.Get("/applications/{id}", s.handleGetApplication)
 		v1.Post("/applications/{id}/analyze", s.handleAnalyzeApplication)
+		v1.Post("/applications/{id}/ignore-rules", s.handleCreateIgnoreRule)
+		v1.Patch("/applications/{id}/ignore-rules/{ruleID}", s.handleSetIgnoreRuleActive)
 		v1.Get("/incidents/{id}", s.handleGetIncident)
 		v1.Get("/incidents/{id}/timeline", s.handleGetIncidentTimeline)
 		v1.Post("/github/webhook", s.handleGitHubWebhook)
@@ -225,11 +230,112 @@ func (s *Server) handleGetApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ignoreRules, err := s.store.ListIgnoreRulesForApplication(r.Context(), app.WorkspaceID, app.ID)
+	if err != nil {
+		s.logger.Error("list application ignore rules failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "application_ignore_rules_query_failed", "failed to load application ignore rules", s.responseMeta(r))
+		return
+	}
+
 	writeSuccess(w, http.StatusOK, applicationDetailsResponse{
 		Application:  app,
 		Incidents:    incidents,
 		Suppressions: suppressions,
+		IgnoreRules:  ignoreRules,
 	}, s.responseMeta(r))
+}
+
+func (s *Server) handleCreateIgnoreRule(w http.ResponseWriter, r *http.Request) {
+	app, err := s.store.GetApplicationByID(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		if err == storage.ErrNotFound {
+			writeError(w, http.StatusNotFound, "application_not_found", "application was not found", s.responseMeta(r))
+			return
+		}
+		s.logger.Error("lookup application for ignore rule failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "application_query_failed", "failed to load application", s.responseMeta(r))
+		return
+	}
+	if !s.authorizeWorkspace(w, r, app.WorkspaceID, auth.RoleEditor) {
+		return
+	}
+
+	var req createIgnoreRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON", s.responseMeta(r))
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.MatchExpression = strings.TrimSpace(req.MatchExpression)
+	req.ResourceRef = strings.TrimSpace(req.ResourceRef)
+	req.Reason = strings.TrimSpace(req.Reason)
+	if req.Name == "" || req.MatchExpression == "" || req.Reason == "" {
+		writeError(w, http.StatusBadRequest, "missing_fields", "name, match_expression, and reason are required", s.responseMeta(r))
+		return
+	}
+
+	createdBy := "api"
+	if s.authRequired {
+		principal, _ := auth.PrincipalFromRequest(r)
+		createdBy = principal.UserID
+	}
+	rule, err := s.store.CreateIgnoreRule(r.Context(), storage.CreateIgnoreRuleParams{
+		WorkspaceID:     app.WorkspaceID,
+		ApplicationID:   app.ID,
+		ResourceRef:     req.ResourceRef,
+		Name:            req.Name,
+		MatchExpression: req.MatchExpression,
+		Reason:          req.Reason,
+		CreatedBy:       createdBy,
+	})
+	if err != nil {
+		if errors.Is(err, storage.ErrConflict) {
+			writeError(w, http.StatusConflict, "ignore_rule_name_conflict", "an ignore rule with this name already exists for this application", s.responseMeta(r))
+			return
+		}
+		s.logger.Error("create application ignore rule failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "ignore_rule_create_failed", "failed to create ignore rule", s.responseMeta(r))
+		return
+	}
+	writeSuccess(w, http.StatusCreated, rule, s.responseMeta(r))
+}
+
+func (s *Server) handleSetIgnoreRuleActive(w http.ResponseWriter, r *http.Request) {
+	app, err := s.store.GetApplicationByID(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		if err == storage.ErrNotFound {
+			writeError(w, http.StatusNotFound, "application_not_found", "application was not found", s.responseMeta(r))
+			return
+		}
+		s.logger.Error("lookup application for ignore rule update failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "application_query_failed", "failed to load application", s.responseMeta(r))
+		return
+	}
+	if !s.authorizeWorkspace(w, r, app.WorkspaceID, auth.RoleEditor) {
+		return
+	}
+
+	var req updateIgnoreRuleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json", "request body must be valid JSON", s.responseMeta(r))
+		return
+	}
+	if req.Active == nil {
+		writeError(w, http.StatusBadRequest, "missing_fields", "active is required", s.responseMeta(r))
+		return
+	}
+
+	rule, err := s.store.SetIgnoreRuleActiveForApplication(r.Context(), chi.URLParam(r, "ruleID"), app.ID, *req.Active)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "ignore_rule_not_found", "application-owned ignore rule was not found", s.responseMeta(r))
+			return
+		}
+		s.logger.Error("update application ignore rule failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "ignore_rule_update_failed", "failed to update ignore rule", s.responseMeta(r))
+		return
+	}
+	writeSuccess(w, http.StatusOK, rule, s.responseMeta(r))
 }
 
 func (s *Server) handleAnalyzeApplication(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,7 @@
 package apihttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -36,6 +37,15 @@ func (m mockStore) ListIncidentsByApplication(context.Context, string) ([]model.
 }
 func (m mockStore) ListSuppressedFindingsByApplication(context.Context, string) ([]model.SuppressedFinding, error) {
 	return nil, nil
+}
+func (m mockStore) ListIgnoreRulesForApplication(context.Context, string, string) ([]model.IgnoreRule, error) {
+	return nil, nil
+}
+func (m mockStore) CreateIgnoreRule(context.Context, storage.CreateIgnoreRuleParams) (model.IgnoreRule, error) {
+	return model.IgnoreRule{}, nil
+}
+func (m mockStore) SetIgnoreRuleActiveForApplication(context.Context, string, string, bool) (model.IgnoreRule, error) {
+	return model.IgnoreRule{}, nil
 }
 func (m mockStore) CreateJob(context.Context, storage.CreateJobParams) (model.Job, error) {
 	return model.Job{}, nil
@@ -84,7 +94,11 @@ func (applicationDetailsStore) ListSuppressedFindingsByApplication(context.Conte
 	return []model.SuppressedFinding{{ID: "suppressed-1", FieldPath: "spec.replicas"}}, nil
 }
 
-func TestGetApplicationIncludesSuppressedFindings(t *testing.T) {
+func (applicationDetailsStore) ListIgnoreRulesForApplication(context.Context, string, string) ([]model.IgnoreRule, error) {
+	return []model.IgnoreRule{{ID: "rule-1", MatchExpression: "spec.replicas"}}, nil
+}
+
+func TestGetApplicationIncludesSuppressionsAndIgnoreRules(t *testing.T) {
 	s := NewServer(applicationDetailsStore{}, mockQueue{}, slog.Default(), "", false)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/applications/application-1", nil)
 	rec := httptest.NewRecorder()
@@ -103,5 +117,69 @@ func TestGetApplicationIncludesSuppressedFindings(t *testing.T) {
 	}
 	if len(response.Data.Suppressions) != 1 || response.Data.Suppressions[0].ID != "suppressed-1" {
 		t.Fatalf("expected suppression audit record in application response, got %#v", response.Data.Suppressions)
+	}
+	if len(response.Data.IgnoreRules) != 1 || response.Data.IgnoreRules[0].ID != "rule-1" {
+		t.Fatalf("expected ignore rule in application response, got %#v", response.Data.IgnoreRules)
+	}
+}
+
+type ignoreRuleMutationStore struct {
+	mockStore
+	created storage.CreateIgnoreRuleParams
+	ruleID  string
+	active  bool
+}
+
+func (ignoreRuleMutationStore) GetApplicationByID(context.Context, string) (model.Application, error) {
+	return model.Application{ID: "application-1", WorkspaceID: "workspace-1"}, nil
+}
+
+func (s *ignoreRuleMutationStore) CreateIgnoreRule(_ context.Context, params storage.CreateIgnoreRuleParams) (model.IgnoreRule, error) {
+	s.created = params
+	return model.IgnoreRule{ID: "rule-1", ApplicationID: params.ApplicationID, Active: true}, nil
+}
+
+func (s *ignoreRuleMutationStore) SetIgnoreRuleActiveForApplication(_ context.Context, ruleID, applicationID string, active bool) (model.IgnoreRule, error) {
+	s.ruleID = ruleID
+	s.active = active
+	return model.IgnoreRule{ID: ruleID, ApplicationID: applicationID, Active: active}, nil
+}
+
+func TestCreateIgnoreRuleScopesRuleToApplicationAndActor(t *testing.T) {
+	store := &ignoreRuleMutationStore{}
+	s := NewServer(store, mockQueue{}, slog.Default(), "", true)
+	body := bytes.NewBufferString(`{"name":"  HPA replicas ","match_expression":" spec.replicas ","resource_ref":" apps/v1/Deployment:payments/ledger-api ","reason":" autoscaler "}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/applications/application-1/ignore-rules", body)
+	req.Header.Set("X-User-ID", "user-1")
+	req.Header.Set("X-Workspace-ID", "workspace-1")
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, rec.Code)
+	}
+	if store.created.ApplicationID != "application-1" || store.created.WorkspaceID != "workspace-1" {
+		t.Fatalf("expected application-scoped rule, got %#v", store.created)
+	}
+	if store.created.CreatedBy != "user-1" || store.created.MatchExpression != "spec.replicas" ||
+		store.created.ResourceRef != "apps/v1/Deployment:payments/ledger-api" {
+		t.Fatalf("unexpected create parameters: %#v", store.created)
+	}
+}
+
+func TestSetIgnoreRuleActiveTargetsApplicationOwnedRule(t *testing.T) {
+	store := &ignoreRuleMutationStore{}
+	s := NewServer(store, mockQueue{}, slog.Default(), "", false)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/applications/application-1/ignore-rules/rule-1", bytes.NewBufferString(`{"active":false}`))
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if store.ruleID != "rule-1" || store.active {
+		t.Fatalf("expected rule to be disabled, got id=%q active=%t", store.ruleID, store.active)
 	}
 }

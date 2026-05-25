@@ -11,7 +11,7 @@ StateSight is **not** a deployment controller and does not replace Argo CD or Fl
 - Go API service with versioned routes, request IDs, structured JSON responses, health/readiness, and basic metrics.
 - Go worker service that consumes Redis queue jobs and writes deterministic analysis outputs to Postgres.
 - React + TypeScript + Vite + Tailwind web app with routed pages and API-backed data loading.
-- PostgreSQL migrations for core domain entities and suppression audit records.
+- PostgreSQL migrations for core domain entities, suppression audit records, and scoped ignore rules.
 - Seed workflow with realistic sample data.
 - Docker Compose local stack for Postgres, Redis, API, worker, and web.
 - Makefile commands for setup, migrate, seed, run, format, test, and docs checks.
@@ -20,7 +20,7 @@ StateSight is **not** a deployment controller and does not replace Argo CD or Fl
 
 - Semantic diffing currently covers resource presence, replica counts, first-container images, and annotations; it is not a complete Kubernetes diff engine.
 - Live-state collection uses `kubectl` for a limited resource set rather than a Kubernetes client integration.
-- Evidence attribution is placeholder data; ignore rules currently support exact field-path suppression only.
+- Evidence attribution is placeholder data; ignore rules currently support exact field-path and optional exact-resource suppression only.
 - GitHub webhook endpoint is baseline-only (not full GitHub App install/auth flow).
 - Git desired-state ingestion reads plain YAML/JSON manifests; Helm, Kustomize, Argo CD, and Flux integrations are not implemented.
 - No auto-remediation.
@@ -47,19 +47,19 @@ The worker honors:
 
 When `kubectl` cannot collect live resources, analysis fails by default. Set `ALLOW_SYNTHETIC_LIVE_STATE=true` only for local pipeline demonstrations; resulting incidents do not represent observations from a cluster.
 
-## Ignore Rule Baseline
+## Ignore Rules
 
-Active `ignore_rules` rows apply within their workspace during analysis. For the current baseline, `match_expression` is one exact drift field path, such as:
+An ignore rule's `match_expression` is one exact drift field path, such as:
 
 - `spec.replicas`
 - `spec.template.spec.containers[0].image`
 - `metadata.annotations.example.com/managed-by`
 
-Matching is case-sensitive and trims surrounding whitespace. Wildcards and regular expressions are not supported. If multiple active rules match one field path, the oldest rule is used first. A suppressed candidate does not create a drift incident; instead, the worker stores a `suppressed_findings` audit record linked to the analysis snapshots and shows it in the application's Suppressed view.
+Matching is case-sensitive and trims surrounding whitespace. Wildcards and regular expressions are not supported. Rules created through the application API or UI are scoped to that application and can optionally specify an exact `resource_ref`. Active resource-specific application rules are evaluated before application-wide rules, which are evaluated before inherited workspace rules. Within the same scope, the oldest matching rule is used first.
 
-Rules currently have no application or resource selector: a matching field path is suppressed across the entire workspace. Use this baseline only for fields the workspace intentionally manages outside desired state.
+Existing rows with no `application_id` remain inherited workspace rules for compatibility. They are displayed on application details as read-only because changing one affects every application in that workspace.
 
-Rule management API and UI surfaces are not implemented yet; persisted rules must currently be administered through the database.
+A suppressed candidate does not create a drift incident. The worker stores a `suppressed_findings` audit record linked to the analysis snapshots, including the matching rule name and reason captured at analysis time. Application details expose the audit history under `Suppressed` and rule management under `Ignore Rules`. Managed application rules can currently be created, enabled, and disabled; editing, deletion, and workspace-rule administration are not implemented.
 
 ## Architecture Overview
 
@@ -92,6 +92,8 @@ Detailed notes:
 cp .env.example .env
 cp apps/web/.env.example apps/web/.env
 ```
+
+The local Vite server uses its `/api` proxy by default. Keep `VITE_API_BASE_URL` empty in local development; Docker Compose supplies the internal API proxy target for the web container.
 
 ### 3) Start Infrastructure + Services
 
@@ -146,16 +148,18 @@ make web
 - `POST /api/v1/applications`
 - `GET /api/v1/applications/:id`
 - `POST /api/v1/applications/:id/analyze`
+- `POST /api/v1/applications/:id/ignore-rules`
+- `PATCH /api/v1/applications/:id/ignore-rules/:ruleID`
 - `GET /api/v1/incidents/:id`
 - `GET /api/v1/incidents/:id/timeline`
 - `POST /api/v1/github/webhook`
 
-Application detail responses include `incidents` and `suppressions`; suppressed findings include the matching rule name and reason captured at analysis time.
+Application detail responses include `incidents`, `suppressions`, and applicable `ignore_rules`; suppressed findings include the matching rule name and reason captured at analysis time.
 
 ## Next Suggested Implementation Steps
 
 1. Replace placeholder evidence attribution with evidence derived from real source and cluster signals.
-2. Add ignore-rule API/UI management and richer application/resource-specific scoping.
+2. Extend ignore-rule administration with editing, deletion, and deliberate workspace-wide rule management.
 3. Expand normalization, diff coverage, and incident grouping with focused tests.
 4. Replace header-trusted identity with an authenticated workspace access flow.
 5. Add GitOps rendering/integration support and hardened Kubernetes collection.

@@ -19,7 +19,7 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 ## Data and Queue
 
-- PostgreSQL: source of truth for applications, snapshots, incidents, suppressed findings, evidence, jobs, and event metadata.
+- PostgreSQL: source of truth for applications, snapshots, incidents, suppressed findings, scoped ignore rules, evidence, jobs, and event metadata.
 - Redis: lightweight queue transport for asynchronous work.
 
 ## Worker Runtime Configuration
@@ -31,12 +31,12 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 ## Ignore-Rule Evaluation
 
-- The worker loads active rules for the application's workspace only when an analysis produces drift candidates.
+- The worker loads active rules applicable to the analyzed application only when analysis produces drift candidates.
 - Each baseline `match_expression` is an exact, case-sensitive drift field path after trimming surrounding whitespace.
-- A rule applies to that field path across its workspace; resource- or application-specific selectors are not supported yet.
-- Rules are considered in creation order, with ID as a deterministic tie-breaker; the first match suppresses incident creation for that candidate.
+- Application-managed rules carry an `application_id` and may additionally specify an exact `resource_ref`; legacy rules without an application remain inherited workspace rules.
+- Resource-scoped application rules are considered before application-wide rules, then inherited workspace rules. Creation time and ID provide deterministic ordering inside a scope.
 - A suppression writes a `suppressed_findings` audit record linked to the analysis snapshots and a snapshot of the rule name/reason, then appears in application details.
-- Rule-management APIs and UI remain future work.
+- Application details display applicable rules and allow creation or activation changes for application-owned rules; inherited workspace rules are read-only through this surface.
 
 ## Key Internal Boundaries
 

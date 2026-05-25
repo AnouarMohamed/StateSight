@@ -8,13 +8,14 @@ import (
 
 // Evaluator identifies the first persisted rule that suppresses a drift field.
 type Evaluator interface {
-	FindMatch(rules []model.IgnoreRule, fieldPath string) (model.IgnoreRule, bool)
+	FindMatch(rules []model.IgnoreRule, resourceRef, fieldPath string) (model.IgnoreRule, bool)
 }
 
-// ExactFieldPathEvaluator matches a rule expression to one canonical drift field path.
+// ExactFieldPathEvaluator matches canonical drift fields and optional exact resources.
 type ExactFieldPathEvaluator struct{}
 
-func (ExactFieldPathEvaluator) FindMatch(rules []model.IgnoreRule, fieldPath string) (model.IgnoreRule, bool) {
+func (ExactFieldPathEvaluator) FindMatch(rules []model.IgnoreRule, resourceRef, fieldPath string) (model.IgnoreRule, bool) {
+	resourceRef = strings.TrimSpace(resourceRef)
 	fieldPath = strings.TrimSpace(fieldPath)
 	if fieldPath == "" {
 		return model.IgnoreRule{}, false
@@ -22,6 +23,10 @@ func (ExactFieldPathEvaluator) FindMatch(rules []model.IgnoreRule, fieldPath str
 
 	for _, rule := range rules {
 		if !rule.Active {
+			continue
+		}
+		ruleResourceRef := strings.TrimSpace(rule.ResourceRef)
+		if ruleResourceRef != "" && ruleResourceRef != resourceRef {
 			continue
 		}
 		if strings.TrimSpace(rule.MatchExpression) == fieldPath {

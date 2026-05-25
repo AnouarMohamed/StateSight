@@ -39,7 +39,7 @@ Use this file to record meaningful project decisions as the codebase grows.
   Context: The schema contains persisted ignore rules, but the worker previously ignored them. A broad or implicit expression language would make suppression difficult to reason about before rule-management and audit surfaces exist.
   Options considered: keep rules inactive until UI work, interpret expressions as glob or regular-expression patterns, implement exact field-path matching first.
   Chosen approach: load active rules for an application's workspace and suppress only candidates whose canonical field path exactly matches `match_expression`.
-  Consequences: common known-noise fields can be suppressed deterministically across a workspace; resource-specific matching, wildcard matching, and management endpoints remain future work.
+  Consequences: common known-noise fields can be suppressed deterministically across a workspace; wildcard matching remains out of scope, while later management work can narrow rule reach.
 
 - Date: 2026-05-25
   Decision: Suppressed findings are persisted as audit records instead of existing only in logs.
@@ -47,3 +47,10 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: log suppression only, model suppressed findings as ordinary incidents, store dedicated suppression audit records.
   Chosen approach: store a `suppressed_findings` record linked to desired/live snapshots and capture matching rule name/reason at suppression time.
   Consequences: application details can show hidden drift without conflating it with actionable incidents; future rule editing or deletion does not erase the recorded explanation.
+
+- Date: 2026-05-25
+  Decision: Newly managed ignore rules are application-scoped with optional exact resource restriction.
+  Context: Workspace-wide field suppression is too broad for routine operator management, but existing rules must keep their behavior after an upgrade.
+  Options considered: keep workspace-only rules, require every rule to specify one resource, support application scope with optional exact resource matching while retaining legacy rows.
+  Chosen approach: API/UI-created rules always reference one application and may store one exact `resource_ref`; null-application rows remain inherited workspace rules and appear read-only in application details.
+  Consequences: operators can suppress expected drift with narrower blast radius, resource-specific rules take precedence over broader effective rules, and editing or administering inherited workspace rules remains future work.
