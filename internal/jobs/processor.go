@@ -47,11 +47,21 @@ type Processor struct {
 	logger          *slog.Logger
 }
 
-func NewProcessor(store Store, logger *slog.Logger) *Processor {
+type ProcessorOptions struct {
+	GitBinary               string
+	GitCacheDir             string
+	KubectlBinary           string
+	AllowSyntheticLiveState bool
+}
+
+func NewProcessor(store Store, logger *slog.Logger, options ProcessorOptions) *Processor {
 	return &Processor{
-		store:           store,
-		fetcher:         sourceingest.NewGitFetcher("git", ".statesight/git-cache"),
-		collector:       k8scollect.NewCollector(k8scollect.CollectorOptions{}),
+		store:   store,
+		fetcher: sourceingest.NewGitFetcher(options.GitBinary, options.GitCacheDir),
+		collector: k8scollect.NewCollector(k8scollect.CollectorOptions{
+			KubectlBinary:          options.KubectlBinary,
+			AllowSyntheticFallback: options.AllowSyntheticLiveState,
+		}),
 		normalizer:      normalize.PassThroughNormalizer{},
 		diffEngine:      diff.SemanticEngine{},
 		grouper:         incidents.SimpleGrouper{},

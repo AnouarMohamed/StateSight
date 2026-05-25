@@ -63,6 +63,7 @@ services:
       GIT_BIN: git
       GIT_CACHE_DIR: /tmp/statesight/git-cache
       KUBECTL_BIN: kubectl
+      ALLOW_SYNTHETIC_LIVE_STATE: "false"
     depends_on:
       postgres:
         condition: service_healthy

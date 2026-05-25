@@ -44,7 +44,12 @@ func run() error {
 	}
 	defer queue.Close()
 
-	processor := jobs.NewProcessor(storage.NewRepository(pool), logger)
+	processor := jobs.NewProcessor(storage.NewRepository(pool), logger, jobs.ProcessorOptions{
+		GitBinary:               cfg.GitBinary,
+		GitCacheDir:             cfg.GitCacheDir,
+		KubectlBinary:           cfg.KubectlBinary,
+		AllowSyntheticLiveState: cfg.AllowSyntheticLiveState,
+	})
 
 	workerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()

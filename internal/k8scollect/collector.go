@@ -23,7 +23,8 @@ type Collector interface {
 }
 
 type CollectorOptions struct {
-	KubectlBinary string
+	KubectlBinary          string
+	AllowSyntheticFallback bool
 }
 
 type Adapter interface {
@@ -42,10 +43,13 @@ func NewCollector(options CollectorOptions) Collector {
 		binary = "kubectl"
 	}
 
-	return collector{
-		primary:  KubectlAdapter{KubectlBinary: binary},
-		fallback: SyntheticAdapter{},
+	result := collector{
+		primary: KubectlAdapter{KubectlBinary: binary},
 	}
+	if options.AllowSyntheticFallback {
+		result.fallback = SyntheticAdapter{}
+	}
+	return result
 }
 
 func (c collector) CollectLiveState(ctx context.Context, cluster model.Cluster, app model.Application) (LiveState, error) {
@@ -124,7 +128,7 @@ func (a KubectlAdapter) Collect(ctx context.Context, cluster model.Cluster, app 
 	return payload.Items, nil
 }
 
-// SyntheticAdapter is a fallback for local environments without cluster access.
+// SyntheticAdapter provides demo-only live state when explicitly enabled.
 type SyntheticAdapter struct{}
 
 func (SyntheticAdapter) Name() string {
