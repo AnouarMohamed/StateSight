@@ -88,10 +88,31 @@ export type SuppressedFinding = {
   suppressed_at: string;
 };
 
+export type IgnoreRule = {
+  id: string;
+  workspace_id: string;
+  application_id: string;
+  resource_ref: string;
+  name: string;
+  match_expression: string;
+  reason: string;
+  created_by: string;
+  active: boolean;
+  created_at: string;
+};
+
+export type CreateIgnoreRuleInput = {
+  name: string;
+  match_expression: string;
+  resource_ref: string;
+  reason: string;
+};
+
 export type ApplicationDetails = {
   application: Application;
   incidents: Incident[];
   suppressions: SuppressedFinding[];
+  ignore_rules: IgnoreRule[];
 };
 
 export type IncidentDetails = {
@@ -151,6 +172,20 @@ export function getApplication(id: string) {
 export function analyzeApplication(id: string) {
   return request<{ job_id: string; status: string }>(`/api/v1/applications/${id}/analyze`, {
     method: "POST"
+  });
+}
+
+export function createIgnoreRule(applicationId: string, input: CreateIgnoreRuleInput) {
+  return request<IgnoreRule>(`/api/v1/applications/${applicationId}/ignore-rules`, {
+    method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function setIgnoreRuleActive(applicationId: string, ruleId: string, active: boolean) {
+  return request<IgnoreRule>(`/api/v1/applications/${applicationId}/ignore-rules/${ruleId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ active })
   });
 }
 
