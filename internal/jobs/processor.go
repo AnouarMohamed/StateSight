@@ -26,6 +26,7 @@ type Store interface {
 	GetApplicationByID(ctx context.Context, id string) (model.Application, error)
 	GetSourceDefinitionByID(ctx context.Context, id string) (model.SourceDefinition, error)
 	GetClusterByID(ctx context.Context, id string) (model.Cluster, error)
+	ListActiveIgnoreRulesByWorkspace(ctx context.Context, workspaceID string) ([]model.IgnoreRule, error)
 	CreateDesiredSnapshot(ctx context.Context, params storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error)
 	CreateLiveSnapshot(ctx context.Context, params storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error)
 	CreateIncident(ctx context.Context, params storage.CreateIncidentParams) (model.DriftIncident, error)
@@ -67,7 +68,7 @@ func NewProcessor(store Store, logger *slog.Logger, options ProcessorOptions) *P
 		grouper:         incidents.SimpleGrouper{},
 		attributor:      evidence.MockAttributor{},
 		recommendation:  scoring.RuleBasedRecommendation{},
-		ignoreEvaluator: ignorerules.NoopEvaluator{},
+		ignoreEvaluator: ignorerules.ExactFieldPathEvaluator{},
 		logger:          logger,
 	}
 }
@@ -177,13 +178,25 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 		return fmt.Errorf("group incidents: %w", err)
 	}
 
-	for _, candidate := range candidates {
-		ignored, reason, err := p.ignoreEvaluator.ShouldIgnore(ctx, app.ID, candidate.FieldPath)
+	var rules []model.IgnoreRule
+	if len(candidates) > 0 {
+		rules, err = p.store.ListActiveIgnoreRulesByWorkspace(ctx, app.WorkspaceID)
 		if err != nil {
-			return fmt.Errorf("evaluate ignore rule: %w", err)
+			return fmt.Errorf("list active ignore rules: %w", err)
 		}
+	}
+
+	for _, candidate := range candidates {
+		rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.FieldPath)
 		if ignored {
-			p.logger.Info("candidate ignored by rule", "application_id", app.ID, "field_path", candidate.FieldPath, "reason", reason)
+			p.logger.Info(
+				"candidate ignored by rule",
+				"application_id", app.ID,
+				"field_path", candidate.FieldPath,
+				"ignore_rule_id", rule.ID,
+				"ignore_rule_name", rule.Name,
+				"reason", rule.Reason,
+			)
 			continue
 		}
 
