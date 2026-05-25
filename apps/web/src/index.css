@@ -1,13 +1,13 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #dbe6f4;
-  background-color: #0b1017;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  color: #e6edf3;
+  background-color: #0d1117;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -17,12 +17,42 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(1200px 600px at 0% 0%, rgba(74, 163, 255, 0.08), transparent 60%),
-    radial-gradient(1000px 500px at 100% 0%, rgba(66, 184, 131, 0.06), transparent 65%),
-    #0b1017;
+  background: #0d1117;
 }
 
 a {
   color: inherit;
+}
+
+code,
+.font-mono {
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}
+
+::selection {
+  background: #1f4d80;
+}
+
+:focus-visible {
+  outline: 2px solid #4493f8;
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  button,
+  input,
+  .touch-target {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }
