@@ -18,11 +18,12 @@ StateSight is **not** a deployment controller and does not replace Argo CD or Fl
 
 ## Current Limitations (Intentional)
 
-- Diffing is seeded mock logic, not full semantic diffing yet.
-- Kubernetes collection is placeholder (future client-go integration).
+- Semantic diffing currently covers resource presence, replica counts, first-container images, and annotations; it is not a complete Kubernetes diff engine.
+- Live-state collection uses `kubectl` for a limited resource set rather than a Kubernetes client integration.
+- Evidence attribution is placeholder data, and stored ignore rules are not evaluated yet.
 - GitHub webhook endpoint is baseline-only (not full GitHub App install/auth flow).
+- Git desired-state ingestion reads plain YAML/JSON manifests; Helm, Kustomize, Argo CD, and Flux integrations are not implemented.
 - No auto-remediation.
-- No Argo/Flux integrations yet.
 
 ## Auth and RBAC Baseline
 
@@ -35,6 +36,16 @@ Expected request headers in auth-enabled mode:
 - `X-User-Email` (optional)
 
 Roles come from `workspace_memberships` (`viewer`, `editor`, `admin`).
+
+## Analysis Safety and Configuration
+
+The worker honors:
+
+- `GIT_BIN` and `GIT_CACHE_DIR` for desired-state checkouts.
+- `KUBECTL_BIN` for live-state collection.
+- `ALLOW_SYNTHETIC_LIVE_STATE`, which defaults to `false`.
+
+When `kubectl` cannot collect live resources, analysis fails by default. Set `ALLOW_SYNTHETIC_LIVE_STATE=true` only for local pipeline demonstrations; resulting incidents do not represent observations from a cluster.
 
 ## Architecture Overview
 
@@ -86,6 +97,8 @@ make migrate-up
 make seed
 ```
 
+The seed data provides a prebuilt incident for UI inspection. Its source repository is illustrative, not a runnable analysis input. Running a real analysis requires an accessible manifest repository and Kubernetes credentials available to the worker. A containerized worker also needs any kubeconfig path referenced by a cluster record mounted inside its container.
+
 ### 6) Run Services Locally (optional alternative to containerized app services)
 
 ```bash
@@ -120,12 +133,13 @@ make web
 - `GET /api/v1/applications/:id`
 - `POST /api/v1/applications/:id/analyze`
 - `GET /api/v1/incidents/:id`
+- `GET /api/v1/incidents/:id/timeline`
 - `POST /api/v1/github/webhook`
 
 ## Next Suggested Implementation Steps
 
-1. Replace seeded diff logic with first real resource-normalized semantic diffing.
-2. Add real desired-state ingestion from Git source definitions.
-3. Add real live-state collection adapters for Kubernetes clusters.
-4. Expand incident grouping and timeline construction logic.
-5. Add authentication, workspace RBAC, and multi-tenant access control.
+1. Replace placeholder evidence attribution with evidence derived from real source and cluster signals.
+2. Implement ignore-rule evaluation and API/UI management around persisted rules.
+3. Expand normalization, diff coverage, and incident grouping with focused tests.
+4. Replace header-trusted identity with an authenticated workspace access flow.
+5. Add GitOps rendering/integration support and hardened Kubernetes collection.
