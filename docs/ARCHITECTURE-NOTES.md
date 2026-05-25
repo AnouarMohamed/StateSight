@@ -27,6 +27,7 @@ This is a high-level direction, not a fixed final architecture.
 - DriftField
 - EvidenceRecord
 - IgnoreRule
+- SuppressedFinding
 
 ## Design Direction
 
