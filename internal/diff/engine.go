@@ -16,6 +16,7 @@ type Finding struct {
 	Category       string
 	Severity       string
 	Confidence     float64
+	ResourceKey    string
 	ResourceRef    string
 	FieldPath      string
 	DesiredValue   string
@@ -42,6 +43,7 @@ func (e SemanticEngine) Compare(_ context.Context, _ model.Application, desired 
 				Category:       "existence",
 				Severity:       "high",
 				Confidence:     0.95,
+				ResourceKey:    d.Key,
 				ResourceRef:    resourceRef(d),
 				FieldPath:      "$resource",
 				DesiredValue:   "present",
@@ -62,6 +64,7 @@ func (e SemanticEngine) Compare(_ context.Context, _ model.Application, desired 
 			Category:       "existence",
 			Severity:       "medium",
 			Confidence:     0.81,
+			ResourceKey:    l.Key,
 			ResourceRef:    resourceRef(l),
 			FieldPath:      "$resource",
 			DesiredValue:   "missing",
@@ -88,6 +91,7 @@ func compareResource(desired, live normalize.Resource) []Finding {
 			Category:       "workload",
 			Severity:       "medium",
 			Confidence:     0.89,
+			ResourceKey:    desired.Key,
 			ResourceRef:    ref,
 			FieldPath:      "spec.replicas",
 			DesiredValue:   fmt.Sprintf("%d", desiredReplicas),
@@ -104,6 +108,7 @@ func compareResource(desired, live normalize.Resource) []Finding {
 			Category:       "configuration",
 			Severity:       "high",
 			Confidence:     0.93,
+			ResourceKey:    desired.Key,
 			ResourceRef:    ref,
 			FieldPath:      "spec.template.spec.containers[0].image",
 			DesiredValue:   desiredImage,
@@ -124,6 +129,7 @@ func compareResource(desired, live normalize.Resource) []Finding {
 			Category:       "metadata",
 			Severity:       "low",
 			Confidence:     0.73,
+			ResourceKey:    desired.Key,
 			ResourceRef:    ref,
 			FieldPath:      "metadata.annotations." + key,
 			DesiredValue:   dVal,

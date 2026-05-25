@@ -18,10 +18,11 @@
 - persist and surface audit records for suppressed findings
 - manage application-scoped ignore rules with optional exact resource matching
 - enforce merge-gating CI, security analysis, migration smoke verification, and deployable-image scanning
+- derive incident evidence from Git revisions, live collection sources, and exact Kubernetes field ownership
 
 ## Next: Trustworthy Analysis
 
-- replace placeholder evidence attribution with real provenance signals
+- correlate provenance with audit, deployment, and controller signals without inferring causality from ownership alone
 - extend ignore-rule administration with edit/delete flows and deliberate workspace-wide controls
 - improve incident grouping and semantic normalization/diff coverage
 - replace trusted request headers with a real authentication integration

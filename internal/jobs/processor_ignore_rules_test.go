@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -98,6 +99,52 @@ func TestProcessAnalyzeSkipsIgnoreRulesWhenThereAreNoCandidates(t *testing.T) {
 	}
 }
 
+func TestProcessAnalyzePersistsCapturedProvenanceEvidence(t *testing.T) {
+	store := &ignoreRuleAnalysisStore{
+		app: model.Application{
+			ID:                 "application-1",
+			WorkspaceID:        "workspace-1",
+			SourceDefinitionID: "source-1",
+			ClusterID:          "cluster-1",
+			Name:               "ledger-api",
+			Namespace:          "payments",
+		},
+		source: model.SourceDefinition{
+			RepoURL:       "https://github.com/example/platform-config",
+			DefaultBranch: "main",
+			Path:          "clusters/prod",
+		},
+		cluster: model.Cluster{ID: "cluster-1", Name: "prod-eu"},
+	}
+
+	processor := NewProcessor(store, slog.New(slog.NewTextHandler(io.Discard, nil)), ProcessorOptions{})
+	processor.fetcher = staticDesiredStateFetcher{}
+	processor.collector = staticLiveStateCollector{}
+
+	if err := processor.processAnalyze(context.Background(), Message{ApplicationID: store.app.ID}); err != nil {
+		t.Fatalf("process analysis: %v", err)
+	}
+	if store.incidentsCreated != 1 {
+		t.Fatalf("expected one incident for unsuppressed drift, got %d", store.incidentsCreated)
+	}
+	if len(store.evidenceRecords) != 2 {
+		t.Fatalf("expected Git and live evidence records, got %#v", store.evidenceRecords)
+	}
+	if store.evidenceRecords[0].Source != "git" || store.evidenceRecords[0].Actor != "not-attributed" {
+		t.Fatalf("unexpected Git evidence: %#v", store.evidenceRecords[0])
+	}
+	var gitMetadata map[string]any
+	if err := json.Unmarshal([]byte(store.evidenceRecords[0].Metadata), &gitMetadata); err != nil {
+		t.Fatalf("decode Git metadata: %v", err)
+	}
+	if gitMetadata["revision"] != "revision-1" || gitMetadata["repository"] != store.source.RepoURL {
+		t.Fatalf("expected persisted Git provenance, got %#v", gitMetadata)
+	}
+	if store.evidenceRecords[1].Source != "kubectl" || store.evidenceRecords[1].Actor != "not-attributed" {
+		t.Fatalf("unexpected live evidence: %#v", store.evidenceRecords[1])
+	}
+}
+
 func TestProcessAnalyzeFailsWhenSuppressionCannotBeAudited(t *testing.T) {
 	store := &ignoreRuleAnalysisStore{
 		app: model.Application{
@@ -131,6 +178,8 @@ func TestProcessAnalyzeFailsWhenSuppressionCannotBeAudited(t *testing.T) {
 
 type ignoreRuleAnalysisStore struct {
 	app                     model.Application
+	source                  model.SourceDefinition
+	cluster                 model.Cluster
 	rules                   []model.IgnoreRule
 	rulesWorkspaceID        string
 	rulesApplicationID      string
@@ -138,6 +187,7 @@ type ignoreRuleAnalysisStore struct {
 	desiredSnapshotsCreated int
 	liveSnapshotsCreated    int
 	incidentsCreated        int
+	evidenceRecords         []storage.CreateEvidenceRecordParams
 	suppressedFindings      []storage.CreateSuppressedFindingParams
 	suppressionErr          error
 }
@@ -152,12 +202,12 @@ func (s *ignoreRuleAnalysisStore) GetApplicationByID(context.Context, string) (m
 	return s.app, nil
 }
 
-func (*ignoreRuleAnalysisStore) GetSourceDefinitionByID(context.Context, string) (model.SourceDefinition, error) {
-	return model.SourceDefinition{}, nil
+func (s *ignoreRuleAnalysisStore) GetSourceDefinitionByID(context.Context, string) (model.SourceDefinition, error) {
+	return s.source, nil
 }
 
-func (*ignoreRuleAnalysisStore) GetClusterByID(context.Context, string) (model.Cluster, error) {
-	return model.Cluster{}, nil
+func (s *ignoreRuleAnalysisStore) GetClusterByID(context.Context, string) (model.Cluster, error) {
+	return s.cluster, nil
 }
 
 func (s *ignoreRuleAnalysisStore) ListActiveIgnoreRulesForAnalysis(_ context.Context, workspaceID, applicationID string) ([]model.IgnoreRule, error) {
@@ -186,7 +236,8 @@ func (*ignoreRuleAnalysisStore) CreateDriftField(context.Context, storage.Create
 	return model.DriftField{}, nil
 }
 
-func (*ignoreRuleAnalysisStore) CreateEvidenceRecord(context.Context, storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
+func (s *ignoreRuleAnalysisStore) CreateEvidenceRecord(_ context.Context, params storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
+	s.evidenceRecords = append(s.evidenceRecords, params)
 	return model.EvidenceRecord{}, nil
 }
 
@@ -214,7 +265,10 @@ func (staticDesiredStateFetcher) FetchDesired(context.Context, model.Application
 type staticLiveStateCollector struct{}
 
 func (staticLiveStateCollector) CollectLiveState(context.Context, model.Cluster, model.Application) (k8scollect.LiveState, error) {
-	return k8scollect.LiveState{Resources: []map[string]any{deploymentWithReplicas(2)}}, nil
+	return k8scollect.LiveState{
+		Resources: []map[string]any{deploymentWithReplicas(2)},
+		Summary:   map[string]any{"source": "kubectl"},
+	}, nil
 }
 
 type unchangedLiveStateCollector struct{}

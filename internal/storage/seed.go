@@ -26,6 +26,88 @@ func (r *Repository) SeedBaselineData(ctx context.Context) (SeedResult, error) {
 		IncidentID:       "66666666-6666-6666-6666-666666666666",
 	}
 
+	const desiredSnapshotJSON = `{
+		"resources": {
+			"Deployment|payments|ledger-api": {
+				"key": "Deployment|payments|ledger-api",
+				"api_version": "apps/v1",
+				"kind": "Deployment",
+				"namespace": "payments",
+				"name": "ledger-api",
+				"spec": {"replicas": 3},
+				"annotations": {},
+				"raw": {
+					"apiVersion": "apps/v1",
+					"kind": "Deployment",
+					"metadata": {"name": "ledger-api", "namespace": "payments"},
+					"spec": {"replicas": 3}
+				}
+			}
+		}
+	}`
+	const liveSnapshotJSON = `{
+		"resources": {
+			"Deployment|payments|ledger-api": {
+				"key": "Deployment|payments|ledger-api",
+				"api_version": "apps/v1",
+				"kind": "Deployment",
+				"namespace": "payments",
+				"name": "ledger-api",
+				"spec": {"replicas": 2},
+				"annotations": {},
+				"raw": {
+					"apiVersion": "apps/v1",
+					"kind": "Deployment",
+					"metadata": {
+						"name": "ledger-api",
+						"namespace": "payments",
+						"managedFields": [{
+							"manager": "horizontal-pod-autoscaler",
+							"operation": "Update",
+							"apiVersion": "apps/v1",
+							"time": "2026-05-25T12:00:00Z",
+							"fieldsV1": {"f:spec": {"f:replicas": {}}}
+						}]
+					},
+					"spec": {"replicas": 2}
+				}
+			}
+		}
+	}`
+	const gitEvidenceMetadata = `{
+		"repository": "https://github.com/example/platform-config",
+		"revision": "f2a11cd",
+		"resource_ref": "apps/v1/Deployment:payments/ledger-api",
+		"field_path": "spec.replicas",
+		"desired_value": "3",
+		"resource_present": true,
+		"evidence_category": "desired-state-provenance",
+		"demo_seed": true
+	}`
+	const liveEvidenceMetadata = `{
+		"collection_source": "kubectl",
+		"cluster_name": "prod-eu-cluster",
+		"resource_ref": "apps/v1/Deployment:payments/ledger-api",
+		"field_path": "spec.replicas",
+		"live_value": "2",
+		"resource_present": true,
+		"trusted_observation": true,
+		"evidence_category": "live-state-provenance",
+		"demo_seed": true
+	}`
+	const ownershipEvidenceMetadata = `{
+		"manager": "horizontal-pod-autoscaler",
+		"operation": "Update",
+		"api_version": "apps/v1",
+		"observed_at": "2026-05-25T12:00:00Z",
+		"resource_ref": "apps/v1/Deployment:payments/ledger-api",
+		"field_path": "spec.replicas",
+		"matching_entries": 1,
+		"evidence_category": "field-ownership",
+		"interpretation_note": "managed field ownership does not prove who introduced the drift",
+		"demo_seed": true
+	}`
+
 	statements := []string{
 		fmt.Sprintf(`INSERT INTO workspaces (id, name) VALUES ('%s', 'StateSight Demo Workspace') ON CONFLICT (id) DO NOTHING`, result.WorkspaceID),
 		`INSERT INTO users (id, email, display_name) VALUES ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'demo.admin@statesight.local', 'StateSight Demo Admin') ON CONFLICT (id) DO NOTHING`,
@@ -34,12 +116,13 @@ func (r *Repository) SeedBaselineData(ctx context.Context) (SeedResult, error) {
 		fmt.Sprintf(`INSERT INTO source_definitions (id, workspace_id, name, repo_url, default_branch, path) VALUES ('%s', '%s', 'platform-config', 'https://github.com/example/platform-config', 'main', 'clusters/prod') ON CONFLICT (id) DO NOTHING`, result.SourceID, result.WorkspaceID),
 		fmt.Sprintf(`INSERT INTO applications (id, workspace_id, cluster_id, source_definition_id, name, namespace, status) VALUES ('%s', '%s', '%s', '%s', 'ledger-api', 'payments', 'active') ON CONFLICT (id) DO NOTHING`, result.ApplicationOneID, result.WorkspaceID, result.ClusterID, result.SourceID),
 		fmt.Sprintf(`INSERT INTO applications (id, workspace_id, cluster_id, source_definition_id, name, namespace, status) VALUES ('%s', '%s', '%s', '%s', 'risk-engine', 'risk', 'active') ON CONFLICT (id) DO NOTHING`, result.ApplicationTwoID, result.WorkspaceID, result.ClusterID, result.SourceID),
-		fmt.Sprintf(`INSERT INTO desired_snapshots (id, application_id, revision, summary_json) VALUES ('77777777-7777-7777-7777-777777777777', '%s', 'f2a11cd', '{"resources":12,"source":"git"}') ON CONFLICT (id) DO NOTHING`, result.ApplicationOneID),
-		fmt.Sprintf(`INSERT INTO live_snapshots (id, application_id, summary_json) VALUES ('88888888-8888-8888-8888-888888888888', '%s', '{"resources":12,"source":"cluster"}') ON CONFLICT (id) DO NOTHING`, result.ApplicationOneID),
+		fmt.Sprintf(`INSERT INTO desired_snapshots (id, application_id, revision, summary_json) VALUES ('77777777-7777-7777-7777-777777777777', '%s', 'f2a11cd', $json$%s$json$::jsonb) ON CONFLICT (id) DO UPDATE SET revision = EXCLUDED.revision, summary_json = EXCLUDED.summary_json`, result.ApplicationOneID, desiredSnapshotJSON),
+		fmt.Sprintf(`INSERT INTO live_snapshots (id, application_id, summary_json) VALUES ('88888888-8888-8888-8888-888888888888', '%s', $json$%s$json$::jsonb) ON CONFLICT (id) DO UPDATE SET summary_json = EXCLUDED.summary_json`, result.ApplicationOneID, liveSnapshotJSON),
 		fmt.Sprintf(`INSERT INTO drift_incidents (id, application_id, desired_snapshot_id, live_snapshot_id, title, category, severity, confidence, recommended_action, status) VALUES ('%s', '%s', '77777777-7777-7777-7777-777777777777', '88888888-8888-8888-8888-888888888888', 'Replica drift detected', 'workload', 'medium', 0.86, 'investigate', 'open') ON CONFLICT (id) DO NOTHING`, result.IncidentID, result.ApplicationOneID),
 		fmt.Sprintf(`INSERT INTO drift_fields (id, incident_id, resource_ref, field_path, desired_value, live_value, difference_type) VALUES ('99999999-9999-9999-9999-999999999999', '%s', 'apps/v1/Deployment:payments/ledger-api', 'spec.replicas', '3', '2', 'modified') ON CONFLICT (id) DO NOTHING`, result.IncidentID),
-		fmt.Sprintf(`INSERT INTO evidence_records (id, incident_id, source, detail, actor, confidence, metadata) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '%s', 'managedFields', 'last-applied-manager=kubectl-rollout', 'system:serviceaccount:payments:deployer', 0.78, '{"fieldManager":"kubectl-rollout"}') ON CONFLICT (id) DO NOTHING`, result.IncidentID),
-		fmt.Sprintf(`INSERT INTO evidence_records (id, incident_id, source, detail, actor, confidence, metadata) VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '%s', 'event', 'manual scaling observed after deployment', 'alice@example.com', 0.71, '{"reason":"hotfix"}') ON CONFLICT (id) DO NOTHING`, result.IncidentID),
+		fmt.Sprintf(`INSERT INTO evidence_records (id, incident_id, source, detail, actor, confidence, metadata) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '%s', 'git', 'Desired value for apps/v1/Deployment:payments/ledger-api was loaded from Git revision f2a11cd', 'not-attributed', 1, $json$%s$json$::jsonb) ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, detail = EXCLUDED.detail, actor = EXCLUDED.actor, confidence = EXCLUDED.confidence, metadata = EXCLUDED.metadata`, result.IncidentID, gitEvidenceMetadata),
+		fmt.Sprintf(`INSERT INTO evidence_records (id, incident_id, source, detail, actor, confidence, metadata) VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '%s', 'kubectl', 'Live value for apps/v1/Deployment:payments/ledger-api was observed through kubectl', 'not-attributed', 1, $json$%s$json$::jsonb) ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, detail = EXCLUDED.detail, actor = EXCLUDED.actor, confidence = EXCLUDED.confidence, metadata = EXCLUDED.metadata`, result.IncidentID, liveEvidenceMetadata),
+		fmt.Sprintf(`INSERT INTO evidence_records (id, incident_id, source, detail, actor, confidence, metadata) VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd', '%s', 'managedFields', 'Kubernetes managedFields reports horizontal-pod-autoscaler as an owner of spec.replicas on the live resource', 'horizontal-pod-autoscaler', 0.85, $json$%s$json$::jsonb) ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, detail = EXCLUDED.detail, actor = EXCLUDED.actor, confidence = EXCLUDED.confidence, metadata = EXCLUDED.metadata`, result.IncidentID, ownershipEvidenceMetadata),
 	}
 
 	for _, stmt := range statements {

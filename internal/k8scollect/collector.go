@@ -108,6 +108,7 @@ func (a KubectlAdapter) Collect(ctx context.Context, cluster model.Cluster, app 
 		"deployments,statefulsets,daemonsets,services,ingresses,configmaps",
 		"-n", app.Namespace,
 		"-o", "json",
+		"--show-managed-fields=true",
 	)
 
 	cmd := exec.CommandContext(ctx, a.KubectlBinary, args...)
