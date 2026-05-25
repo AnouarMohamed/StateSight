@@ -36,6 +36,15 @@ type GitFetcher struct {
 }
 
 func NewGitFetcher(gitBinary, cacheDir string) GitFetcher {
+	gitBinary = strings.TrimSpace(gitBinary)
+	if gitBinary == "" {
+		gitBinary = "git"
+	}
+	cacheDir = strings.TrimSpace(cacheDir)
+	if cacheDir == "" {
+		cacheDir = ".statesight/git-cache"
+	}
+
 	return GitFetcher{
 		GitBinary: gitBinary,
 		CacheDir:  cacheDir,
