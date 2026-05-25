@@ -19,6 +19,7 @@
 - manage application-scoped ignore rules with optional exact resource matching
 - enforce merge-gating CI, security analysis, migration smoke verification, and deployable-image scanning
 - derive incident evidence from Git revisions, live collection sources, and exact Kubernetes field ownership
+- present drift and provenance in a compact evidence-first operator console
 
 ## Next: Trustworthy Analysis
 
