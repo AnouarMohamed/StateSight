@@ -61,3 +61,10 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: retain minimal Go CI, add quality checks without security enforcement, require reproducible cross-stack and security gates before merge.
   Chosen approach: require Go race/static/vulnerability checks, audited frontend builds, migration and API smoke verification, production-image scanning, dependency review, and CodeQL; pin workflow actions to reviewed commits.
   Consequences: pull requests receive slower but materially stronger validation; branch protection must require the documented checks, and dependency/image updates become routine maintenance rather than deferred risk.
+
+- Date: 2026-05-25
+  Decision: Incident evidence records provenance and exact field ownership without claiming unobserved causality.
+  Context: The baseline generated plausible but fabricated actor evidence for every incident, which is incompatible with forensic use.
+  Options considered: keep placeholder evidence until audit integration exists, remove evidence records entirely, or persist only signals available from the analyzed Git and Kubernetes inputs.
+  Chosen approach: store Git revision and live-collection provenance for each incident; add `managedFields` manager evidence only when the live resource owns the exact compared field; mark synthetic fallback evidence untrusted.
+  Consequences: incident evidence is truthful with current inputs and can support future correlation, but attributing who caused drift requires additional audit, deployment, or controller signals.
