@@ -32,6 +32,7 @@ type Store interface {
 	CreateIncident(ctx context.Context, params storage.CreateIncidentParams) (model.DriftIncident, error)
 	CreateDriftField(ctx context.Context, params storage.CreateDriftFieldParams) (model.DriftField, error)
 	CreateEvidenceRecord(ctx context.Context, params storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error)
+	CreateSuppressedFinding(ctx context.Context, params storage.CreateSuppressedFindingParams) (model.SuppressedFinding, error)
 	InsertGitHubEvent(ctx context.Context, params storage.UpsertGitHubEventParams) (model.GitHubEvent, error)
 }
 
@@ -189,6 +190,25 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 	for _, candidate := range candidates {
 		rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.FieldPath)
 		if ignored {
+			_, err = p.store.CreateSuppressedFinding(ctx, storage.CreateSuppressedFindingParams{
+				ApplicationID:     app.ID,
+				DesiredSnapshotID: desiredSnapshot.ID,
+				LiveSnapshotID:    liveSnapshot.ID,
+				IgnoreRuleID:      rule.ID,
+				IgnoreRuleName:    rule.Name,
+				IgnoreRuleReason:  rule.Reason,
+				Title:             candidate.Title,
+				Category:          candidate.Category,
+				Severity:          candidate.Severity,
+				ResourceRef:       candidate.ResourceRef,
+				FieldPath:         candidate.FieldPath,
+				DesiredValue:      candidate.DesiredValue,
+				LiveValue:         candidate.LiveValue,
+				DifferenceType:    candidate.DifferenceType,
+			})
+			if err != nil {
+				return fmt.Errorf("create suppressed finding: %w", err)
+			}
 			p.logger.Info(
 				"candidate ignored by rule",
 				"application_id", app.ID,

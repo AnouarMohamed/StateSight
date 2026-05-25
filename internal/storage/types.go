@@ -55,6 +55,23 @@ type CreateEvidenceRecordParams struct {
 	Metadata   string
 }
 
+type CreateSuppressedFindingParams struct {
+	ApplicationID     string
+	DesiredSnapshotID string
+	LiveSnapshotID    string
+	IgnoreRuleID      string
+	IgnoreRuleName    string
+	IgnoreRuleReason  string
+	Title             string
+	Category          string
+	Severity          string
+	ResourceRef       string
+	FieldPath         string
+	DesiredValue      string
+	LiveValue         string
+	DifferenceType    string
+}
+
 type UpsertGitHubEventParams struct {
 	EventType  string
 	DeliveryID string
