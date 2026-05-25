@@ -10,14 +10,28 @@ RUN --mount=type=cache,id=statesight-go-mod-v1,target=/go/pkg/mod \
     --mount=type=cache,id=statesight-go-build-v1,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/worker ./apps/worker
 
-FROM alpine:3.23@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS kubectl-fetch
+FROM golang:1.25.10-alpine@sha256:8d22e29d960bc50cd025d93d5b7c7d220b1ee9aa7a239b3c8f55a57e987e8d45 AS kubectl-build
 ARG KUBECTL_VERSION=v1.34.8
-ARG KUBECTL_SHA256=f6249132865c13abe3c9dd5038f5da65849cb86eee1608c001831504e481aa8c
-RUN apk add --no-cache ca-certificates curl \
-    && curl --fail --location --retry 3 --output /kubectl \
-      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
-    && printf '%s  %s\n' "${KUBECTL_SHA256}" /kubectl | sha256sum -c - \
-    && chmod 0755 /kubectl
+ARG KUBERNETES_GIT_COMMIT=1f328c5e9dd683d0c5e69f3d7d58f8371278dec2
+ARG KUBERNETES_SRC_SHA256=3dcb409fd2c0d99535293e7f4e3c66f3e386488129079e7d10d55667a14c1bca
+RUN apk add --no-cache ca-certificates curl
+WORKDIR /src/kubernetes
+RUN curl --fail --location --retry 3 --output /tmp/kubernetes-src.tar.gz \
+      "https://dl.k8s.io/${KUBECTL_VERSION}/kubernetes-src.tar.gz" \
+    && printf '%s  %s\n' "${KUBERNETES_SRC_SHA256}" /tmp/kubernetes-src.tar.gz | sha256sum -c - \
+    && tar --extract --gzip --file /tmp/kubernetes-src.tar.gz --strip-components=1 \
+    && rm /tmp/kubernetes-src.tar.gz
+RUN --mount=type=cache,id=statesight-kubectl-build-v1,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local \
+    go build -mod=vendor -trimpath -tags=selinux,notest,grpcnotrace \
+      -ldflags="-s -w \
+        -X k8s.io/client-go/pkg/version.gitVersion=${KUBECTL_VERSION} \
+        -X k8s.io/client-go/pkg/version.gitCommit=${KUBERNETES_GIT_COMMIT} \
+        -X k8s.io/client-go/pkg/version.gitTreeState=clean \
+        -X k8s.io/component-base/version.gitVersion=${KUBECTL_VERSION} \
+        -X k8s.io/component-base/version.gitCommit=${KUBERNETES_GIT_COMMIT} \
+        -X k8s.io/component-base/version.gitTreeState=clean" \
+      -o /kubectl ./cmd/kubectl
 
 FROM alpine:3.23@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
 RUN apk add --no-cache ca-certificates git \
@@ -25,6 +39,6 @@ RUN apk add --no-cache ca-certificates git \
     && adduser -S -G statesight statesight
 WORKDIR /app
 COPY --from=build /out/worker /app/worker
-COPY --from=kubectl-fetch /kubectl /usr/local/bin/kubectl
+COPY --from=kubectl-build /kubectl /usr/local/bin/kubectl
 USER statesight
 ENTRYPOINT ["/app/worker"]

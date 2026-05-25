@@ -29,7 +29,7 @@ Require pull requests, at least one approving review, and review from code owner
 
 Only fixable high or critical container findings block merges. Non-fixable base-image findings remain visible in scanner output and must be evaluated during dependency/image updates rather than waived silently.
 
-The worker uses an official checksum-verified `kubectl` binary on the Kubernetes `1.34` minor line rather than the Alpine package, because the packaged binary carried a fixable embedded-module advisory. When changing supported Kubernetes minor versions, update `KUBECTL_VERSION` and its official SHA-256 together and rerun the image scan.
+The worker builds `kubectl v1.34.8` from the checksum-verified official Kubernetes source archive with the pinned patched Go toolchain. The Alpine package carried a fixable embedded-module advisory, and the official prebuilt `v1.34.8` executable was compiled with a Go standard library version that the image gate rejects. Building the same Kubernetes minor line preserves the intended client compatibility boundary while removing those compiled-in findings. When changing this source release, update `KUBECTL_VERSION`, `KUBERNETES_GIT_COMMIT`, and `KUBERNETES_SRC_SHA256` together and rerun the image scan.
 
 ## Security Workflow
 
