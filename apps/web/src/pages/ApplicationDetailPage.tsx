@@ -1,13 +1,20 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { analyzeApplication, getApplication } from "../lib/api";
 import { Badge, recommendationTone, severityTone } from "../components/Badge";
 
-const tabs = ["Incidents", "Resources", "Timeline", "Ignore Rules"];
+const tabs = [
+  { id: "incidents", label: "Incidents" },
+  { id: "suppressions", label: "Suppressed" }
+] as const;
+
+type ApplicationTab = (typeof tabs)[number]["id"];
 
 export function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id ?? "";
+  const [activeTab, setActiveTab] = useState<ApplicationTab>("incidents");
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["application", id],
@@ -32,6 +39,7 @@ export function ApplicationDetailPage() {
   if (!data) {
     return <p className="text-ops-muted">Application not found.</p>;
   }
+  const suppressions = data.suppressions ?? [];
 
   return (
     <section className="space-y-6">
@@ -54,57 +62,101 @@ export function ApplicationDetailPage() {
 
       <div className="rounded-xl border border-ops-border bg-ops-panel p-4 shadow-panel">
         <div className="flex flex-wrap gap-2 border-b border-ops-border pb-3">
-          {tabs.map((tab, index) => (
+          {tabs.map((tab) => (
             <button
-              key={tab}
+              key={tab.id}
               type="button"
-              className={`rounded-md px-3 py-1.5 text-sm ${index === 0 ? "bg-[#1a2636] text-ops-text" : "text-ops-muted hover:bg-[#1a2636]"}`}
+              className={`rounded-md px-3 py-1.5 text-sm ${
+                activeTab === tab.id ? "bg-[#1a2636] text-ops-text" : "text-ops-muted hover:bg-[#1a2636]"
+              }`}
+              onClick={() => setActiveTab(tab.id)}
             >
-              {tab}
+              {tab.label}
             </button>
           ))}
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-lg border border-ops-border">
-          <table className="min-w-full divide-y divide-ops-border text-sm">
-            <thead className="bg-[#111a26] text-left text-xs uppercase tracking-wide text-ops-muted">
-              <tr>
-                <th className="px-4 py-3">Incident</th>
-                <th className="px-4 py-3">Category</th>
-                <th className="px-4 py-3">Severity</th>
-                <th className="px-4 py-3">Recommendation</th>
-                <th className="px-4 py-3 text-right">Detail</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ops-border">
-              {data.incidents.length === 0 ? (
+        {activeTab === "incidents" ? (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-ops-border">
+            <table className="min-w-[720px] w-full divide-y divide-ops-border text-sm">
+              <thead className="bg-[#111a26] text-left text-xs uppercase tracking-wide text-ops-muted">
                 <tr>
-                  <td className="px-4 py-6 text-ops-muted" colSpan={5}>
-                    No incidents yet. Run an analysis to generate baseline drift findings.
-                  </td>
+                  <th className="px-4 py-3">Incident</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Severity</th>
+                  <th className="px-4 py-3">Recommendation</th>
+                  <th className="px-4 py-3 text-right">Detail</th>
                 </tr>
-              ) : (
-                data.incidents.map((incident) => (
-                  <tr key={incident.id} className="hover:bg-[#162132]">
-                    <td className="px-4 py-3 font-medium">{incident.title}</td>
-                    <td className="px-4 py-3 text-ops-muted">{incident.category}</td>
-                    <td className="px-4 py-3">
-                      <Badge label={incident.severity} tone={severityTone(incident.severity)} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge label={incident.recommended_action} tone={recommendationTone(incident.recommended_action)} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link to={`/incidents/${incident.id}`} className="font-medium text-ops-accent hover:underline">
-                        View
-                      </Link>
+              </thead>
+              <tbody className="divide-y divide-ops-border">
+                {data.incidents.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-6 text-ops-muted" colSpan={5}>
+                      No incidents recorded.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  data.incidents.map((incident) => (
+                    <tr key={incident.id} className="hover:bg-[#162132]">
+                      <td className="px-4 py-3 font-medium">{incident.title}</td>
+                      <td className="px-4 py-3 text-ops-muted">{incident.category}</td>
+                      <td className="px-4 py-3">
+                        <Badge label={incident.severity} tone={severityTone(incident.severity)} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge label={incident.recommended_action} tone={recommendationTone(incident.recommended_action)} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link to={`/incidents/${incident.id}`} className="font-medium text-ops-accent hover:underline">
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-ops-border">
+            <table className="min-w-[760px] w-full divide-y divide-ops-border text-sm">
+              <thead className="bg-[#111a26] text-left text-xs uppercase tracking-wide text-ops-muted">
+                <tr>
+                  <th className="px-4 py-3">Field</th>
+                  <th className="px-4 py-3">Resource</th>
+                  <th className="px-4 py-3">Rule</th>
+                  <th className="px-4 py-3">Suppressed</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ops-border">
+                {suppressions.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-6 text-ops-muted" colSpan={4}>
+                      No suppressed findings recorded.
+                    </td>
+                  </tr>
+                ) : (
+                  suppressions.map((suppression) => (
+                    <tr key={suppression.id} className="hover:bg-[#162132]">
+                      <td className="px-4 py-3">
+                        <p className="font-mono text-xs text-ops-text">{suppression.field_path}</p>
+                        <p className="mt-1 text-xs text-ops-muted">{suppression.title}</p>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-ops-muted">{suppression.resource_ref}</td>
+                      <td className="px-4 py-3">
+                        <p>{suppression.ignore_rule_name}</p>
+                        <p className="mt-1 text-xs text-ops-muted">{suppression.ignore_rule_reason}</p>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-ops-muted">
+                        {new Date(suppression.suppressed_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );

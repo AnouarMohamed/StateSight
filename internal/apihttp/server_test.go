@@ -2,6 +2,7 @@ package apihttp
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -31,6 +32,9 @@ func (m mockStore) GetApplicationByID(context.Context, string) (model.Applicatio
 	return model.Application{}, storage.ErrNotFound
 }
 func (m mockStore) ListIncidentsByApplication(context.Context, string) ([]model.DriftIncident, error) {
+	return nil, nil
+}
+func (m mockStore) ListSuppressedFindingsByApplication(context.Context, string) ([]model.SuppressedFinding, error) {
 	return nil, nil
 }
 func (m mockStore) CreateJob(context.Context, storage.CreateJobParams) (model.Job, error) {
@@ -65,5 +69,39 @@ func TestHealthz(t *testing.T) {
 	body, _ := io.ReadAll(rec.Body)
 	if string(body) == "" {
 		t.Fatal("expected body to be non-empty")
+	}
+}
+
+type applicationDetailsStore struct {
+	mockStore
+}
+
+func (applicationDetailsStore) GetApplicationByID(context.Context, string) (model.Application, error) {
+	return model.Application{ID: "application-1"}, nil
+}
+
+func (applicationDetailsStore) ListSuppressedFindingsByApplication(context.Context, string) ([]model.SuppressedFinding, error) {
+	return []model.SuppressedFinding{{ID: "suppressed-1", FieldPath: "spec.replicas"}}, nil
+}
+
+func TestGetApplicationIncludesSuppressedFindings(t *testing.T) {
+	s := NewServer(applicationDetailsStore{}, mockQueue{}, slog.Default(), "", false)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/applications/application-1", nil)
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var response struct {
+		Data applicationDetailsResponse `json:"data"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data.Suppressions) != 1 || response.Data.Suppressions[0].ID != "suppressed-1" {
+		t.Fatalf("expected suppression audit record in application response, got %#v", response.Data.Suppressions)
 	}
 }

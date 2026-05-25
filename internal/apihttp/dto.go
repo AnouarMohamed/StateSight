@@ -11,8 +11,9 @@ type createApplicationRequest struct {
 }
 
 type applicationDetailsResponse struct {
-	Application model.Application     `json:"application"`
-	Incidents   []model.DriftIncident `json:"incidents"`
+	Application  model.Application         `json:"application"`
+	Incidents    []model.DriftIncident     `json:"incidents"`
+	Suppressions []model.SuppressedFinding `json:"suppressions"`
 }
 
 type analyzeResponse struct {
