@@ -19,7 +19,7 @@ WORKDIR /src/kubernetes
 RUN curl --fail --location --retry 3 --output /tmp/kubernetes-src.tar.gz \
       "https://dl.k8s.io/${KUBECTL_VERSION}/kubernetes-src.tar.gz" \
     && printf '%s  %s\n' "${KUBERNETES_SRC_SHA256}" /tmp/kubernetes-src.tar.gz | sha256sum -c - \
-    && tar --extract --gzip --file /tmp/kubernetes-src.tar.gz --strip-components=1 \
+    && tar --extract --gzip --file /tmp/kubernetes-src.tar.gz \
     && rm /tmp/kubernetes-src.tar.gz
 RUN --mount=type=cache,id=statesight-kubectl-build-v1,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local \
