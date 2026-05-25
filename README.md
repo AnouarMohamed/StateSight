@@ -4,7 +4,7 @@ StateSight is a GitOps forensic platform for Kubernetes.
 
 Its purpose is to compare desired state from Git with live cluster state, explain drift, group it into incidents, and recommend actions (`ignore`, `monitor`, `investigate`, `reconcile`).
 
-StateSight is **not** a deployment controller and does not replace Argo CD or Flux.
+StateSight is **not** a deployment controller like Argo CD or Flux.
 
 ## What This Baseline Includes
 
