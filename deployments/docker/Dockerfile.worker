@@ -10,11 +10,21 @@ RUN --mount=type=cache,id=statesight-go-mod-v1,target=/go/pkg/mod \
     --mount=type=cache,id=statesight-go-build-v1,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/worker ./apps/worker
 
+FROM alpine:3.23@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11 AS kubectl-fetch
+ARG KUBECTL_VERSION=v1.34.8
+ARG KUBECTL_SHA256=f6249132865c13abe3c9dd5038f5da65849cb86eee1608c001831504e481aa8c
+RUN apk add --no-cache ca-certificates curl \
+    && curl --fail --location --retry 3 --output /kubectl \
+      "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
+    && printf '%s  %s\n' "${KUBECTL_SHA256}" /kubectl | sha256sum --check - \
+    && chmod 0755 /kubectl
+
 FROM alpine:3.23@sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11
-RUN apk add --no-cache ca-certificates git kubectl \
+RUN apk add --no-cache ca-certificates git \
     && addgroup -S statesight \
     && adduser -S -G statesight statesight
 WORKDIR /app
 COPY --from=build /out/worker /app/worker
+COPY --from=kubectl-fetch /kubectl /usr/local/bin/kubectl
 USER statesight
 ENTRYPOINT ["/app/worker"]
