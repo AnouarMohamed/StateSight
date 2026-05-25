@@ -31,7 +31,7 @@ API_PORT="${api_port}" AUTH_REQUIRED=false go run ./apps/api >"${api_log}" 2>&1 
 api_pid=$!
 
 for _ in {1..30}; do
-  if curl --fail --silent "${base_url}/readyz" >/dev/null; then
+  if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 "${base_url}/readyz" >/dev/null; then
     break
   fi
   if ! kill -0 "${api_pid}" 2>/dev/null; then
@@ -41,13 +41,13 @@ for _ in {1..30}; do
   sleep 1
 done
 
-curl --fail --silent "${base_url}/readyz" >/dev/null || {
+curl --fail --silent --show-error --connect-timeout 2 --max-time 5 "${base_url}/readyz" >/dev/null || {
   cat "${api_log}" >&2
   exit 1
 }
 
 rule_response="$(
-  curl --fail --silent --show-error \
+  curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
     --request POST "${base_url}/api/v1/applications/${application_id}/ignore-rules" \
     --header "Content-Type: application/json" \
     --data "{\"name\":\"${rule_name}\",\"match_expression\":\"spec.replicas\",\"resource_ref\":\"apps/v1/Deployment:payments/ledger-api\",\"reason\":\"CI smoke verification\"}"
@@ -58,13 +58,16 @@ jq --exit-status \
   '.success and .data.application_id == $app and .data.active == true' \
   <<<"${rule_response}" >/dev/null
 
-details_response="$(curl --fail --silent --show-error "${base_url}/api/v1/applications/${application_id}")"
+details_response="$(
+  curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
+    "${base_url}/api/v1/applications/${application_id}"
+)"
 jq --exit-status --arg id "${rule_id}" \
   '.data.ignore_rules | any(.id == $id and .active == true)' \
   <<<"${details_response}" >/dev/null
 
 update_response="$(
-  curl --fail --silent --show-error \
+  curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
     --request PATCH "${base_url}/api/v1/applications/${application_id}/ignore-rules/${rule_id}" \
     --header "Content-Type: application/json" \
     --data '{"active":false}'
