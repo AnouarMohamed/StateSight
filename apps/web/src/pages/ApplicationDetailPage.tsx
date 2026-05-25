@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { analyzeApplication, createIgnoreRule, getApplication, setIgnoreRuleActive, type CreateIgnoreRuleInput } from "../lib/api";
-import { Badge, recommendationTone, severityTone } from "../components/Badge";
+import { Badge } from "../components/Badge";
+import { recommendationTone, severityTone } from "../lib/badgeTones";
 
 const tabs = [
   { id: "incidents", label: "Incidents" },

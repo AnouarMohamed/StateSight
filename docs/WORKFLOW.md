@@ -13,6 +13,7 @@ This is the lightweight workflow for StateSight collaboration.
 ## Working Rules
 
 - `main` is protected.
+- Require the status checks and security gates listed in `docs/CI.md` before merging to `main`.
 - Keep changes small and easy to review.
 - Ask before large structural changes.
 - Update relevant documentation and the decision log when behavior or architecture changes.

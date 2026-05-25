@@ -1,28 +1,221 @@
-name: Go
+name: Continuous Integration
 
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
+env:
+  GOTOOLCHAIN: auto
+  NODE_VERSION: "22.13.0"
+
 jobs:
-  verify:
+  workflow-policy:
+    name: Workflow Policy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Vet
-        run: go vet ./...
+      - name: Lint GitHub Actions workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
 
-      - name: Test
-        run: go test ./...
+      - name: Parse CI shell scripts
+        run: bash -n scripts/ci/*.sh
+
+  go-quality:
+    name: Go Quality and Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify committed module graph
+        run: |
+          go mod verify
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Check formatting
+        run: |
+          mapfile -t gofiles < <(find . -name '*.go' -not -path './vendor/*' -not -path './apps/web/node_modules/*' -not -path './apps/web/dist/*')
+          unformatted="$(gofmt -l "${gofiles[@]}")"
+          test -z "${unformatted}" || { printf 'gofmt required:\n%s\n' "${unformatted}"; exit 1; }
+
+      - name: Run vet
+        run: |
+          packages_output="$(./scripts/ci/go-packages.sh)"
+          mapfile -t packages <<<"${packages_output}"
+          go vet "${packages[@]}"
+
+      - name: Run Staticcheck
+        run: |
+          packages_output="$(./scripts/ci/go-packages.sh)"
+          mapfile -t packages <<<"${packages_output}"
+          go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 "${packages[@]}"
+
+      - name: Check reachable Go vulnerabilities
+        run: |
+          packages_output="$(./scripts/ci/go-packages.sh)"
+          mapfile -t packages <<<"${packages_output}"
+          go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 "${packages[@]}"
+
+      - name: Run race-enabled tests with coverage
+        run: |
+          packages_output="$(./scripts/ci/go-packages.sh)"
+          mapfile -t packages <<<"${packages_output}"
+          go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out "${packages[@]}"
+
+      - name: Upload Go coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-coverage
+          path: coverage.out
+          if-no-files-found: error
+          retention-days: 14
+
+  web-quality:
+    name: Web Quality and Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Reject moderate or greater npm advisories
+        run: npm audit --audit-level=moderate
+
+      - name: Lint web source
+        run: npm run lint
+
+      - name: Type-check web source
+        run: npm run typecheck
+
+      - name: Build web assets
+        run: npm run build
+
+  database-smoke:
+    name: Database Migration and API Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+        env:
+          POSTGRES_DB: statesight
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d statesight"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/statesight?sslmode=disable
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify migrations and API persistence path
+        run: ./scripts/ci/api-smoke.sh
+
+  container-security:
+    name: Container Build and Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [go-quality, web-quality]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Build deployable images
+        run: |
+          docker build --pull --file deployments/docker/Dockerfile.api --tag statesight-api:ci .
+          docker build --pull --file deployments/docker/Dockerfile.worker --tag statesight-worker:ci .
+          docker build --pull --file deployments/docker/Dockerfile.web --tag statesight-web:ci .
+
+      - name: Verify web runtime security headers
+        run: |
+          container_id="$(docker run --detach --add-host api:127.0.0.1 --publish 127.0.0.1:18081:8080 statesight-web:ci)"
+          trap 'docker rm --force "${container_id}" >/dev/null' EXIT
+          for _ in {1..10}; do
+            if curl --fail --silent --head http://127.0.0.1:18081/ >headers.txt; then
+              break
+            fi
+            sleep 1
+          done
+          test -s headers.txt
+          grep --ignore-case --quiet '^Content-Security-Policy:' headers.txt
+          grep --ignore-case --quiet '^Referrer-Policy: no-referrer' headers.txt
+          grep --ignore-case --quiet '^X-Content-Type-Options: nosniff' headers.txt
+          grep --ignore-case --quiet '^X-Frame-Options: DENY' headers.txt
+
+      - name: Scan images for fixable high or critical vulnerabilities
+        run: ./scripts/ci/scan-containers.sh statesight-api:ci statesight-worker:ci statesight-web:ci

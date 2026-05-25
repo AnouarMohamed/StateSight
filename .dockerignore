@@ -1,5 +1,9 @@
 .git
 .gitignore
+.env
+**/.env
+.statesight
+coverage.out
 node_modules
 **/node_modules
 dist

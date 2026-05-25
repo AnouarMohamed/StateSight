@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "react-router-dom";
-import { Badge, recommendationTone, severityTone } from "../components/Badge";
+import { Badge } from "../components/Badge";
+import { recommendationTone, severityTone } from "../lib/badgeTones";
 import { getIncident } from "../lib/api";
 
 export function IncidentDetailPage() {

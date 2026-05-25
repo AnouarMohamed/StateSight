@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { analyzeApplication, getApplications } from "../lib/api";
-import { Badge, severityTone } from "../components/Badge";
+import { Badge } from "../components/Badge";
+import { severityTone } from "../lib/badgeTones";
 
 export function ApplicationsPage() {
   const queryClient = useQueryClient();
