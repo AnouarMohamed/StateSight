@@ -6,7 +6,7 @@ StateSight baseline provides a minimal but extensible end-to-end path:
 
 1. API accepts analyze/webhook requests.
 2. API records job metadata in Postgres and enqueues job message in Redis.
-3. Worker consumes jobs and writes snapshots/incidents/evidence.
+3. Worker consumes jobs and writes snapshots, incidents or suppression audits, and evidence.
 4. Web app reads API data and renders overview, application, and incident pages.
 
 The current worker obtains desired state by cloning configured Git sources and obtains live state through `kubectl`. Failure to collect live state fails an analysis by default; synthetic live state is an explicit local-demo option and is not trustworthy forensic evidence.
@@ -19,7 +19,7 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 ## Data and Queue
 
-- PostgreSQL: source of truth for applications, snapshots, incidents, evidence, jobs, and event metadata.
+- PostgreSQL: source of truth for applications, snapshots, incidents, suppressed findings, evidence, jobs, and event metadata.
 - Redis: lightweight queue transport for asynchronous work.
 
 ## Worker Runtime Configuration
@@ -35,7 +35,8 @@ The current worker obtains desired state by cloning configured Git sources and o
 - Each baseline `match_expression` is an exact, case-sensitive drift field path after trimming surrounding whitespace.
 - A rule applies to that field path across its workspace; resource- or application-specific selectors are not supported yet.
 - Rules are considered in creation order, with ID as a deterministic tie-breaker; the first match suppresses incident creation for that candidate.
-- Suppressed candidates are currently reported in worker logs. Persisted suppression auditing and rule-management APIs are future work.
+- A suppression writes a `suppressed_findings` audit record linked to the analysis snapshots and a snapshot of the rule name/reason, then appears in application details.
+- Rule-management APIs and UI remain future work.
 
 ## Key Internal Boundaries
 

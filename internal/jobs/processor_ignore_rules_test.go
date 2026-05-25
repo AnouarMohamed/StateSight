@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -48,6 +49,16 @@ func TestProcessAnalyzeSuppressesCandidateMatchingWorkspaceIgnoreRule(t *testing
 	if store.incidentsCreated != 0 {
 		t.Fatalf("expected matching candidate to be suppressed, created %d incidents", store.incidentsCreated)
 	}
+	if len(store.suppressedFindings) != 1 {
+		t.Fatalf("expected one suppression audit record, got %d", len(store.suppressedFindings))
+	}
+	suppressed := store.suppressedFindings[0]
+	if suppressed.IgnoreRuleID != "rule-1" || suppressed.FieldPath != "spec.replicas" {
+		t.Fatalf("unexpected suppression audit payload: %#v", suppressed)
+	}
+	if suppressed.DesiredSnapshotID != "desired-1" || suppressed.LiveSnapshotID != "live-1" {
+		t.Fatalf("expected suppression record linked to analysis snapshots, got %#v", suppressed)
+	}
 	if store.desiredSnapshotsCreated != 1 || store.liveSnapshotsCreated != 1 {
 		t.Fatal("expected analysis snapshots to be persisted before candidate suppression")
 	}
@@ -79,6 +90,40 @@ func TestProcessAnalyzeSkipsIgnoreRulesWhenThereAreNoCandidates(t *testing.T) {
 	if store.incidentsCreated != 0 {
 		t.Fatalf("expected no incidents without drift, created %d", store.incidentsCreated)
 	}
+	if len(store.suppressedFindings) != 0 {
+		t.Fatalf("expected no suppressions without drift, got %d", len(store.suppressedFindings))
+	}
+}
+
+func TestProcessAnalyzeFailsWhenSuppressionCannotBeAudited(t *testing.T) {
+	store := &ignoreRuleAnalysisStore{
+		app: model.Application{
+			ID:                 "application-1",
+			WorkspaceID:        "workspace-1",
+			SourceDefinitionID: "source-1",
+			ClusterID:          "cluster-1",
+			Name:               "ledger-api",
+			Namespace:          "payments",
+		},
+		rules: []model.IgnoreRule{{
+			ID:              "rule-1",
+			MatchExpression: "spec.replicas",
+			Active:          true,
+		}},
+		suppressionErr: errors.New("storage unavailable"),
+	}
+
+	processor := NewProcessor(store, slog.New(slog.NewTextHandler(io.Discard, nil)), ProcessorOptions{})
+	processor.fetcher = staticDesiredStateFetcher{}
+	processor.collector = staticLiveStateCollector{}
+
+	err := processor.processAnalyze(context.Background(), Message{ApplicationID: store.app.ID})
+	if err == nil {
+		t.Fatal("expected analysis to fail when suppression audit cannot be persisted")
+	}
+	if store.incidentsCreated != 0 {
+		t.Fatalf("expected failed audit not to create incident, created %d", store.incidentsCreated)
+	}
 }
 
 type ignoreRuleAnalysisStore struct {
@@ -89,6 +134,8 @@ type ignoreRuleAnalysisStore struct {
 	desiredSnapshotsCreated int
 	liveSnapshotsCreated    int
 	incidentsCreated        int
+	suppressedFindings      []storage.CreateSuppressedFindingParams
+	suppressionErr          error
 }
 
 func (*ignoreRuleAnalysisStore) MarkJobProcessing(context.Context, string) error { return nil }
@@ -136,6 +183,14 @@ func (*ignoreRuleAnalysisStore) CreateDriftField(context.Context, storage.Create
 
 func (*ignoreRuleAnalysisStore) CreateEvidenceRecord(context.Context, storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
 	return model.EvidenceRecord{}, nil
+}
+
+func (s *ignoreRuleAnalysisStore) CreateSuppressedFinding(_ context.Context, params storage.CreateSuppressedFindingParams) (model.SuppressedFinding, error) {
+	if s.suppressionErr != nil {
+		return model.SuppressedFinding{}, s.suppressionErr
+	}
+	s.suppressedFindings = append(s.suppressedFindings, params)
+	return model.SuppressedFinding{ID: "suppressed-1"}, nil
 }
 
 func (*ignoreRuleAnalysisStore) InsertGitHubEvent(context.Context, storage.UpsertGitHubEventParams) (model.GitHubEvent, error) {

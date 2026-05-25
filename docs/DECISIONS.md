@@ -39,4 +39,11 @@ Use this file to record meaningful project decisions as the codebase grows.
   Context: The schema contains persisted ignore rules, but the worker previously ignored them. A broad or implicit expression language would make suppression difficult to reason about before rule-management and audit surfaces exist.
   Options considered: keep rules inactive until UI work, interpret expressions as glob or regular-expression patterns, implement exact field-path matching first.
   Chosen approach: load active rules for an application's workspace and suppress only candidates whose canonical field path exactly matches `match_expression`.
-  Consequences: common known-noise fields can be suppressed deterministically across a workspace; resource-specific matching, wildcard matching, management endpoints, and persisted suppression audit records remain future work.
+  Consequences: common known-noise fields can be suppressed deterministically across a workspace; resource-specific matching, wildcard matching, and management endpoints remain future work.
+
+- Date: 2026-05-25
+  Decision: Suppressed findings are persisted as audit records instead of existing only in logs.
+  Context: Ignore-rule evaluation prevents incident creation, but operators still need an inspectable record of drift that was withheld and the rule that caused it.
+  Options considered: log suppression only, model suppressed findings as ordinary incidents, store dedicated suppression audit records.
+  Chosen approach: store a `suppressed_findings` record linked to desired/live snapshots and capture matching rule name/reason at suppression time.
+  Consequences: application details can show hidden drift without conflating it with actionable incidents; future rule editing or deletion does not erase the recorded explanation.

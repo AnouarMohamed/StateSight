@@ -11,7 +11,7 @@ StateSight is **not** a deployment controller and does not replace Argo CD or Fl
 - Go API service with versioned routes, request IDs, structured JSON responses, health/readiness, and basic metrics.
 - Go worker service that consumes Redis queue jobs and writes deterministic analysis outputs to Postgres.
 - React + TypeScript + Vite + Tailwind web app with routed pages and API-backed data loading.
-- PostgreSQL migrations for core domain entities.
+- PostgreSQL migrations for core domain entities and suppression audit records.
 - Seed workflow with realistic sample data.
 - Docker Compose local stack for Postgres, Redis, API, worker, and web.
 - Makefile commands for setup, migrate, seed, run, format, test, and docs checks.
@@ -55,7 +55,7 @@ Active `ignore_rules` rows apply within their workspace during analysis. For the
 - `spec.template.spec.containers[0].image`
 - `metadata.annotations.example.com/managed-by`
 
-Matching is case-sensitive and trims surrounding whitespace. Wildcards and regular expressions are not supported. If multiple active rules match one field path, the oldest rule is used first. A suppressed candidate does not create a drift incident; the worker records the matching rule in its structured logs.
+Matching is case-sensitive and trims surrounding whitespace. Wildcards and regular expressions are not supported. If multiple active rules match one field path, the oldest rule is used first. A suppressed candidate does not create a drift incident; instead, the worker stores a `suppressed_findings` audit record linked to the analysis snapshots and shows it in the application's Suppressed view.
 
 Rules currently have no application or resource selector: a matching field path is suppressed across the entire workspace. Use this baseline only for fields the workspace intentionally manages outside desired state.
 
@@ -150,10 +150,12 @@ make web
 - `GET /api/v1/incidents/:id/timeline`
 - `POST /api/v1/github/webhook`
 
+Application detail responses include `incidents` and `suppressions`; suppressed findings include the matching rule name and reason captured at analysis time.
+
 ## Next Suggested Implementation Steps
 
 1. Replace placeholder evidence attribution with evidence derived from real source and cluster signals.
-2. Add ignore-rule API/UI management, richer scoping, and persisted suppression audit records.
+2. Add ignore-rule API/UI management and richer application/resource-specific scoping.
 3. Expand normalization, diff coverage, and incident grouping with focused tests.
 4. Replace header-trusted identity with an authenticated workspace access flow.
 5. Add GitOps rendering/integration support and hardened Kubernetes collection.

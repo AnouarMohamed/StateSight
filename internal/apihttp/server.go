@@ -30,6 +30,7 @@ type Store interface {
 	CreateApplication(ctx context.Context, params storage.CreateApplicationParams) (model.Application, error)
 	GetApplicationByID(ctx context.Context, id string) (model.Application, error)
 	ListIncidentsByApplication(ctx context.Context, applicationID string) ([]model.DriftIncident, error)
+	ListSuppressedFindingsByApplication(ctx context.Context, applicationID string) ([]model.SuppressedFinding, error)
 	CreateJob(ctx context.Context, params storage.CreateJobParams) (model.Job, error)
 	MarkJobFailed(ctx context.Context, id, message string) error
 	GetIncidentDetails(ctx context.Context, id string) (model.IncidentDetails, error)
@@ -217,9 +218,17 @@ func (s *Server) handleGetApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	suppressions, err := s.store.ListSuppressedFindingsByApplication(r.Context(), app.ID)
+	if err != nil {
+		s.logger.Error("list application suppressed findings failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
+		writeError(w, http.StatusInternalServerError, "application_suppressions_query_failed", "failed to load application suppressions", s.responseMeta(r))
+		return
+	}
+
 	writeSuccess(w, http.StatusOK, applicationDetailsResponse{
-		Application: app,
-		Incidents:   incidents,
+		Application:  app,
+		Incidents:    incidents,
+		Suppressions: suppressions,
 	}, s.responseMeta(r))
 }
 

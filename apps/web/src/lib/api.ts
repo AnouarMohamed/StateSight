@@ -69,9 +69,29 @@ export type EvidenceRecord = {
   created_at: string;
 };
 
+export type SuppressedFinding = {
+  id: string;
+  application_id: string;
+  desired_snapshot_id: string;
+  live_snapshot_id: string;
+  ignore_rule_id: string;
+  ignore_rule_name: string;
+  ignore_rule_reason: string;
+  title: string;
+  category: string;
+  severity: string;
+  resource_ref: string;
+  field_path: string;
+  desired_value: string;
+  live_value: string;
+  difference_type: string;
+  suppressed_at: string;
+};
+
 export type ApplicationDetails = {
   application: Application;
   incidents: Incident[];
+  suppressions: SuppressedFinding[];
 };
 
 export type IncidentDetails = {

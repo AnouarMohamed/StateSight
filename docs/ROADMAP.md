@@ -15,12 +15,13 @@
 - enforce real-live-state collection by default; synthetic results are explicit demo behavior only
 - pass worker runtime configuration to source and cluster adapters
 - execute active workspace ignore rules for exact drift field-path matches
+- persist and surface audit records for suppressed findings
 - establish CI and focused tests for critical analysis boundaries
 
 ## Next: Trustworthy Analysis
 
 - replace placeholder evidence attribution with real provenance signals
-- add ignore-rule management APIs/UI, richer match scopes, and persisted suppression audit records
+- add ignore-rule management APIs/UI and richer application/resource-specific match scopes
 - improve incident grouping and semantic normalization/diff coverage
 - replace trusted request headers with a real authentication integration
 
