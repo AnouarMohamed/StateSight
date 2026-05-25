@@ -12,6 +12,7 @@ type Candidate struct {
 	Category       string
 	Severity       string
 	Confidence     float64
+	ResourceKey    string
 	ResourceRef    string
 	FieldPath      string
 	DesiredValue   string
@@ -35,6 +36,7 @@ func (g SimpleGrouper) Group(_ context.Context, findings []diff.Finding) ([]Cand
 			Category:       finding.Category,
 			Severity:       finding.Severity,
 			Confidence:     finding.Confidence,
+			ResourceKey:    finding.ResourceKey,
 			ResourceRef:    finding.ResourceRef,
 			FieldPath:      finding.FieldPath,
 			DesiredValue:   finding.DesiredValue,

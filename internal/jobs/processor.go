@@ -67,7 +67,7 @@ func NewProcessor(store Store, logger *slog.Logger, options ProcessorOptions) *P
 		normalizer:      normalize.PassThroughNormalizer{},
 		diffEngine:      diff.SemanticEngine{},
 		grouper:         incidents.SimpleGrouper{},
-		attributor:      evidence.MockAttributor{},
+		attributor:      evidence.ProvenanceAttributor{},
 		recommendation:  scoring.RuleBasedRecommendation{},
 		ignoreEvaluator: ignorerules.ExactFieldPathEvaluator{},
 		logger:          logger,
@@ -187,6 +187,16 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 		}
 	}
 
+	attributionContext := evidence.AnalysisContext{
+		Application:     app,
+		Source:          source,
+		Cluster:         cluster,
+		DesiredRevision: desiredState.Revision,
+		Desired:         normalizedDesired,
+		Live:            normalizedLive,
+		LiveSummary:     liveState.Summary,
+	}
+
 	for _, candidate := range candidates {
 		rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.ResourceRef, candidate.FieldPath)
 		if ignored {
@@ -252,7 +262,7 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 			return fmt.Errorf("create drift field: %w", err)
 		}
 
-		attributions, err := p.attributor.BuildAttributions(ctx, app, candidate)
+		attributions, err := p.attributor.BuildAttributions(ctx, attributionContext, candidate)
 		if err != nil {
 			return fmt.Errorf("build attribution: %w", err)
 		}
