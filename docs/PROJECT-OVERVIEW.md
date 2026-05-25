@@ -31,4 +31,6 @@ It is designed to help teams understand drift between:
 
 ## Current Stage
 
-Baseline scaffold in progress with API, worker, web, migrations, and seed flow.
+The baseline analyze flow exists: API, Redis-backed worker, Postgres persistence, React UI, Git manifest ingestion, `kubectl` live-state collection, first semantic diffs, timelines, and workspace RBAC boundaries.
+
+Current work is to make analysis trustworthy beyond the baseline: real evidence attribution, effective ignore rules, broader semantic coverage, stronger authentication, and test coverage around the processing pipeline.

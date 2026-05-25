@@ -15,5 +15,7 @@ This is the lightweight workflow for StateSight collaboration.
 - `main` is protected.
 - Keep changes small and easy to review.
 - Ask before large structural changes.
+- Update relevant documentation and the decision log when behavior or architecture changes.
+- Record verification performed for each change.
 - Clarity is more important than speed.
 - If blocked, ask early in the issue or PR.

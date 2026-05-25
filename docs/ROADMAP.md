@@ -1,37 +1,32 @@
 # StateSight Roadmap
 
-## Stage 1: Repository Foundation (Current)
+## Completed Baseline
 
-- establish repo structure
-- define docs and collaboration workflow
-- add starter conventions and templates
+- repository structure, collaboration documents, local Docker Compose workflow
+- Go API and asynchronous Redis-backed worker with PostgreSQL persistence
+- React operator UI for overview, applications, incidents, and timelines
+- Git manifest fetcher and `kubectl` live-state collector
+- initial resource normalization and semantic diff engine
+- baseline workspace RBAC boundary and GitHub webhook ingestion
 
-## Stage 2: Baseline Scaffold
+## Current: Baseline Stabilization
 
-- add initial monorepo skeleton
-- add API, worker, and web placeholders
-- add local development conventions
+- keep documentation aligned with implemented capabilities and limitations
+- enforce real-live-state collection by default; synthetic results are explicit demo behavior only
+- pass worker runtime configuration to source and cluster adapters
+- establish CI and focused tests for critical analysis boundaries
 
-## Stage 3: First Analyze Flow
+## Next: Trustworthy Analysis
 
-- create first end-to-end analyze request path
-- persist minimal entities
-- show minimal UI flow for analysis status
+- replace placeholder evidence attribution with real provenance signals
+- implement persisted ignore-rule evaluation and management
+- improve incident grouping and semantic normalization/diff coverage
+- replace trusted request headers with a real authentication integration
 
-## Stage 4: First Real Diffing
+## Later: Integrations and Operations
 
-- add first meaningful desired vs live diff logic
-- define incident grouping baseline
-
-## Stage 5: Evidence and Timelines
-
-- attach evidence records to incidents
-- provide timeline-oriented change visibility
-
-## Stage 6: Integrations Later
-
-- deepen Git provider integration
-- deepen Kubernetes collection logic
-- harden scaling, reliability, and observability
+- support GitOps rendering and controller integrations
+- deepen Kubernetes collection and multi-cluster operational controls
+- harden reliability, observability, deployment, and scale behavior
 
 Roadmap is expected to evolve as implementation learns from real usage.

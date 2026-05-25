@@ -2,14 +2,14 @@
 
 This is a high-level direction, not a fixed final architecture.
 
-## Likely Stack
+## Baseline Stack
 
 - Frontend: React + TypeScript
 - Backend services: Go
 - Data: PostgreSQL
 - Queue/cache: Redis
 
-## Likely Services
+## Baseline Services
 
 - web app
 - API service
@@ -34,7 +34,8 @@ This is a high-level direction, not a fixed final architecture.
 - small, testable packages
 - explicit contracts between components
 - clear observability hooks
+- fail analysis when real live-state collection is unavailable unless demo behavior is explicitly enabled
 
 ## Important Note
 
-Architecture will evolve during the baseline scaffold and early implementation phases. Changes should be recorded in `docs/DECISIONS.md`.
+Architecture will evolve during implementation. Behavior-affecting changes should be recorded in `docs/DECISIONS.md`.

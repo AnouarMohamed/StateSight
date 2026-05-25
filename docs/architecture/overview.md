@@ -9,6 +9,8 @@ StateSight baseline provides a minimal but extensible end-to-end path:
 3. Worker consumes jobs and writes snapshots/incidents/evidence.
 4. Web app reads API data and renders overview, application, and incident pages.
 
+The current worker obtains desired state by cloning configured Git sources and obtains live state through `kubectl`. Failure to collect live state fails an analysis by default; synthetic live state is an explicit local-demo option and is not trustworthy forensic evidence.
+
 ## Services
 
 - `apps/api`: HTTP entrypoint, routing, request middleware, API contracts.
@@ -19,6 +21,13 @@ StateSight baseline provides a minimal but extensible end-to-end path:
 
 - PostgreSQL: source of truth for applications, snapshots, incidents, evidence, jobs, and event metadata.
 - Redis: lightweight queue transport for asynchronous work.
+
+## Worker Runtime Configuration
+
+- `GIT_BIN`: Git executable used to fetch desired-state repositories.
+- `GIT_CACHE_DIR`: temporary checkout parent directory.
+- `KUBECTL_BIN`: executable used for cluster collection.
+- `ALLOW_SYNTHETIC_LIVE_STATE`: optional demo-only fallback, disabled by default.
 
 ## Key Internal Boundaries
 

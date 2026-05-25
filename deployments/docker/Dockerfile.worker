@@ -7,7 +7,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/worker ./apps/worker
 
-FROM gcr.io/distroless/static-debian12
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates git kubectl
 WORKDIR /app
 COPY --from=build /out/worker /app/worker
 ENTRYPOINT ["/app/worker"]

@@ -9,26 +9,27 @@ import (
 )
 
 type Common struct {
-	ServiceName         string
-	LogLevel            string
-	DatabaseURL         string
-	RedisURL            string
-	GitHubWebhookSecret string
-	GitBinary           string
-	GitCacheDir         string
-	KubectlBinary       string
-	AuthRequired        bool
+	ServiceName string
+	LogLevel    string
+	DatabaseURL string
+	RedisURL    string
 }
 
 type API struct {
 	Common
-	HTTPPort          int
-	ReadHeaderTimeout time.Duration
+	GitHubWebhookSecret string
+	AuthRequired        bool
+	HTTPPort            int
+	ReadHeaderTimeout   time.Duration
 }
 
 type Worker struct {
 	Common
-	PollTimeout time.Duration
+	GitBinary               string
+	GitCacheDir             string
+	KubectlBinary           string
+	AllowSyntheticLiveState bool
+	PollTimeout             time.Duration
 }
 
 func LoadAPI() (API, error) {
@@ -38,31 +39,32 @@ func LoadAPI() (API, error) {
 		return API{}, err
 	}
 	return API{
-		Common:            common,
-		HTTPPort:          port,
-		ReadHeaderTimeout: 5 * time.Second,
+		Common:              common,
+		GitHubWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		AuthRequired:        boolFromEnv("AUTH_REQUIRED", false),
+		HTTPPort:            port,
+		ReadHeaderTimeout:   5 * time.Second,
 	}, nil
 }
 
 func LoadWorker() (Worker, error) {
 	common := loadCommon("statesight-worker")
 	return Worker{
-		Common:      common,
-		PollTimeout: 5 * time.Second,
+		Common:                  common,
+		GitBinary:               stringFromEnv("GIT_BIN", "git"),
+		GitCacheDir:             stringFromEnv("GIT_CACHE_DIR", ".statesight/git-cache"),
+		KubectlBinary:           stringFromEnv("KUBECTL_BIN", "kubectl"),
+		AllowSyntheticLiveState: boolFromEnv("ALLOW_SYNTHETIC_LIVE_STATE", false),
+		PollTimeout:             5 * time.Second,
 	}, nil
 }
 
 func loadCommon(defaultService string) Common {
 	return Common{
-		ServiceName:         stringFromEnv("SERVICE_NAME", defaultService),
-		LogLevel:            stringFromEnv("LOG_LEVEL", "info"),
-		DatabaseURL:         stringFromEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/statesight?sslmode=disable"),
-		RedisURL:            stringFromEnv("REDIS_URL", "redis://localhost:6379/0"),
-		GitHubWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
-		GitBinary:           stringFromEnv("GIT_BIN", "git"),
-		GitCacheDir:         stringFromEnv("GIT_CACHE_DIR", ".statesight/git-cache"),
-		KubectlBinary:       stringFromEnv("KUBECTL_BIN", "kubectl"),
-		AuthRequired:        boolFromEnv("AUTH_REQUIRED", false),
+		ServiceName: stringFromEnv("SERVICE_NAME", defaultService),
+		LogLevel:    stringFromEnv("LOG_LEVEL", "info"),
+		DatabaseURL: stringFromEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/statesight?sslmode=disable"),
+		RedisURL:    stringFromEnv("REDIS_URL", "redis://localhost:6379/0"),
 	}
 }
 
