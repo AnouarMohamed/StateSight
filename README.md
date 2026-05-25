@@ -93,6 +93,8 @@ cp .env.example .env
 cp apps/web/.env.example apps/web/.env
 ```
 
+The local Vite server uses its `/api` proxy by default. Keep `VITE_API_BASE_URL` empty in local development; Docker Compose supplies the internal API proxy target for the web container.
+
 ### 3) Start Infrastructure + Services
 
 ```bash
