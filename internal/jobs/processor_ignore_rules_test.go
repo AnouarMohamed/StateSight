@@ -13,7 +13,7 @@ import (
 	"github.com/AnouarMohamed/StateSight/pkg/model"
 )
 
-func TestProcessAnalyzeSuppressesCandidateMatchingWorkspaceIgnoreRule(t *testing.T) {
+func TestProcessAnalyzeSuppressesCandidateMatchingEffectiveIgnoreRule(t *testing.T) {
 	store := &ignoreRuleAnalysisStore{
 		app: model.Application{
 			ID:                 "application-1",
@@ -25,6 +25,8 @@ func TestProcessAnalyzeSuppressesCandidateMatchingWorkspaceIgnoreRule(t *testing
 		},
 		rules: []model.IgnoreRule{{
 			ID:              "rule-1",
+			ApplicationID:   "application-1",
+			ResourceRef:     "apps/v1/Deployment:payments/ledger-api",
 			Name:            "Allow HPA replica variance",
 			MatchExpression: "spec.replicas",
 			Reason:          "replicas are managed outside Git",
@@ -40,8 +42,9 @@ func TestProcessAnalyzeSuppressesCandidateMatchingWorkspaceIgnoreRule(t *testing
 		t.Fatalf("process analysis: %v", err)
 	}
 
-	if store.rulesWorkspaceID != store.app.WorkspaceID {
-		t.Fatalf("expected rule lookup for workspace %q, got %q", store.app.WorkspaceID, store.rulesWorkspaceID)
+	if store.rulesWorkspaceID != store.app.WorkspaceID || store.rulesApplicationID != store.app.ID {
+		t.Fatalf("expected rule lookup for workspace/application %q/%q, got %q/%q",
+			store.app.WorkspaceID, store.app.ID, store.rulesWorkspaceID, store.rulesApplicationID)
 	}
 	if store.rulesQueries != 1 {
 		t.Fatalf("expected one rule query per analysis, got %d", store.rulesQueries)
@@ -130,6 +133,7 @@ type ignoreRuleAnalysisStore struct {
 	app                     model.Application
 	rules                   []model.IgnoreRule
 	rulesWorkspaceID        string
+	rulesApplicationID      string
 	rulesQueries            int
 	desiredSnapshotsCreated int
 	liveSnapshotsCreated    int
@@ -156,9 +160,10 @@ func (*ignoreRuleAnalysisStore) GetClusterByID(context.Context, string) (model.C
 	return model.Cluster{}, nil
 }
 
-func (s *ignoreRuleAnalysisStore) ListActiveIgnoreRulesByWorkspace(_ context.Context, workspaceID string) ([]model.IgnoreRule, error) {
+func (s *ignoreRuleAnalysisStore) ListActiveIgnoreRulesForAnalysis(_ context.Context, workspaceID, applicationID string) ([]model.IgnoreRule, error) {
 	s.rulesQueries++
 	s.rulesWorkspaceID = workspaceID
+	s.rulesApplicationID = applicationID
 	return s.rules, nil
 }
 

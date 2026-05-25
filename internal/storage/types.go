@@ -72,6 +72,16 @@ type CreateSuppressedFindingParams struct {
 	DifferenceType    string
 }
 
+type CreateIgnoreRuleParams struct {
+	WorkspaceID     string
+	ApplicationID   string
+	ResourceRef     string
+	Name            string
+	MatchExpression string
+	Reason          string
+	CreatedBy       string
+}
+
 type UpsertGitHubEventParams struct {
 	EventType  string
 	DeliveryID string

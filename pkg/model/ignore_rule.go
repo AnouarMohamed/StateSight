@@ -6,6 +6,8 @@ import "time"
 type IgnoreRule struct {
 	ID              string    `json:"id"`
 	WorkspaceID     string    `json:"workspace_id"`
+	ApplicationID   string    `json:"application_id"`
+	ResourceRef     string    `json:"resource_ref"`
 	Name            string    `json:"name"`
 	MatchExpression string    `json:"match_expression"`
 	Reason          string    `json:"reason"`

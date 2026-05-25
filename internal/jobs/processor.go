@@ -26,7 +26,7 @@ type Store interface {
 	GetApplicationByID(ctx context.Context, id string) (model.Application, error)
 	GetSourceDefinitionByID(ctx context.Context, id string) (model.SourceDefinition, error)
 	GetClusterByID(ctx context.Context, id string) (model.Cluster, error)
-	ListActiveIgnoreRulesByWorkspace(ctx context.Context, workspaceID string) ([]model.IgnoreRule, error)
+	ListActiveIgnoreRulesForAnalysis(ctx context.Context, workspaceID, applicationID string) ([]model.IgnoreRule, error)
 	CreateDesiredSnapshot(ctx context.Context, params storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error)
 	CreateLiveSnapshot(ctx context.Context, params storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error)
 	CreateIncident(ctx context.Context, params storage.CreateIncidentParams) (model.DriftIncident, error)
@@ -181,14 +181,14 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 
 	var rules []model.IgnoreRule
 	if len(candidates) > 0 {
-		rules, err = p.store.ListActiveIgnoreRulesByWorkspace(ctx, app.WorkspaceID)
+		rules, err = p.store.ListActiveIgnoreRulesForAnalysis(ctx, app.WorkspaceID, app.ID)
 		if err != nil {
 			return fmt.Errorf("list active ignore rules: %w", err)
 		}
 	}
 
 	for _, candidate := range candidates {
-		rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.FieldPath)
+		rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.ResourceRef, candidate.FieldPath)
 		if ignored {
 			_, err = p.store.CreateSuppressedFinding(ctx, storage.CreateSuppressedFindingParams{
 				ApplicationID:     app.ID,
