@@ -54,3 +54,10 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: keep workspace-only rules, require every rule to specify one resource, support application scope with optional exact resource matching while retaining legacy rows.
   Chosen approach: API/UI-created rules always reference one application and may store one exact `resource_ref`; null-application rows remain inherited workspace rules and appear read-only in application details.
   Consequences: operators can suppress expected drift with narrower blast radius, resource-specific rules take precedence over broader effective rules, and editing or administering inherited workspace rules remains future work.
+
+- Date: 2026-05-25
+  Decision: Merge gating includes security, database smoke, and deployable-image validation.
+  Context: A forensic platform can hide or misattribute operational drift if its dependencies, migrations, or artifacts are not continuously verified. The original workflow exercised only ordinary Go tests and `go vet`.
+  Options considered: retain minimal Go CI, add quality checks without security enforcement, require reproducible cross-stack and security gates before merge.
+  Chosen approach: require Go race/static/vulnerability checks, audited frontend builds, migration and API smoke verification, production-image scanning, dependency review, and CodeQL; pin workflow actions to reviewed commits.
+  Consequences: pull requests receive slower but materially stronger validation; branch protection must require the documented checks, and dependency/image updates become routine maintenance rather than deferred risk.

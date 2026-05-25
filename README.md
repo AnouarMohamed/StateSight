@@ -77,13 +77,14 @@ Detailed notes:
 
 - [docs/architecture/overview.md](docs/architecture/overview.md)
 - [docs/ARCHITECTURE-NOTES.md](docs/ARCHITECTURE-NOTES.md)
+- [docs/CI.md](docs/CI.md)
 
 ## Local Setup
 
 ### 1) Prerequisites
 
-- Go 1.23+
-- Node 20+
+- Go 1.25.10+
+- Node 22.13+
 - Docker + Docker Compose
 
 ### 2) Environment
@@ -93,7 +94,7 @@ cp .env.example .env
 cp apps/web/.env.example apps/web/.env
 ```
 
-The local Vite server uses its `/api` proxy by default. Keep `VITE_API_BASE_URL` empty in local development; Docker Compose supplies the internal API proxy target for the web container.
+During `npm run dev`, Vite proxies `/api` to the local API by default; keep `VITE_API_BASE_URL` empty for that workflow. Docker Compose serves the built web application through Nginx on port `5173`, with Nginx proxying API requests to the API container.
 
 ### 3) Start Infrastructure + Services
 
@@ -137,6 +138,11 @@ make web
 - `make fmt`
 - `make test`
 - `make lint`
+- `make test-race`
+- `make security-go`
+- `make verify-web`
+- `make workflow-lint`
+- `make script-lint`
 - `make docs-check`
 
 ## Required API Endpoints in This Baseline

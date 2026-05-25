@@ -17,7 +17,7 @@
 - execute active workspace ignore rules for exact drift field-path matches
 - persist and surface audit records for suppressed findings
 - manage application-scoped ignore rules with optional exact resource matching
-- establish CI and focused tests for critical analysis boundaries
+- enforce merge-gating CI, security analysis, migration smoke verification, and deployable-image scanning
 
 ## Next: Trustworthy Analysis
 
