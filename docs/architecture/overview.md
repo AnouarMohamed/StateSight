@@ -15,7 +15,7 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 - Every persisted incident records the Git source, source path, and analyzed revision that supplied its desired-state comparison.
 - Every persisted incident records the live collection source. `kubectl` observations are trusted collection evidence; explicit synthetic fallback records are marked untrusted.
-- For drift fields currently supported by the semantic diff engine, the worker reads live-object `metadata.managedFields` and persists manager evidence only when `fieldsV1` contains the exact compared path. Container-image ownership is resolved through the live container name rather than an assumed list index.
+- The `kubectl` collector requests managed-field output explicitly. For drift fields currently supported by the semantic diff engine, the worker reads live-object `metadata.managedFields` and persists manager evidence only when `fieldsV1` contains the exact compared path. Container-image ownership is resolved through the live container name rather than an assumed list index.
 - A reported field manager establishes ownership metadata only. It is not treated as proof of who caused the observed difference, and the worker does not invent actor identities when no such signal exists.
 
 ## Services
