@@ -71,6 +71,10 @@ Existing rows with no `application_id` remain inherited workspace rules for comp
 
 A suppressed candidate does not create a drift incident. The worker stores a `suppressed_findings` audit record linked to the analysis snapshots, including the matching rule name and reason captured at analysis time. Application details expose the audit history under `Suppressed` and rule management under `Ignore Rules`. Managed application rules can currently be created, enabled, and disabled; editing, deletion, and workspace-rule administration are not implemented.
 
+## Operator Interface
+
+The web application is a dense, dark investigation console designed around scanning and evidence review. It surfaces compared field values, provenance trust state, absent attribution, and Kubernetes ownership caveats without implying unobserved causality. The visual and interaction contract is recorded in `PRODUCT.md` and `DESIGN.md`.
+
 ## Architecture Overview
 
 High-level structure:
