@@ -29,6 +29,14 @@ The current worker obtains desired state by cloning configured Git sources and o
 - `KUBECTL_BIN`: executable used for cluster collection.
 - `ALLOW_SYNTHETIC_LIVE_STATE`: optional demo-only fallback, disabled by default.
 
+## Ignore-Rule Evaluation
+
+- The worker loads active rules for the application's workspace only when an analysis produces drift candidates.
+- Each baseline `match_expression` is an exact, case-sensitive drift field path after trimming surrounding whitespace.
+- A rule applies to that field path across its workspace; resource- or application-specific selectors are not supported yet.
+- Rules are considered in creation order, with ID as a deterministic tie-breaker; the first match suppresses incident creation for that candidate.
+- Suppressed candidates are currently reported in worker logs. Persisted suppression auditing and rule-management APIs are future work.
+
 ## Key Internal Boundaries
 
 - `internal/sourceingest`: desired-state ingestion boundary.

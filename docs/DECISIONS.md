@@ -33,3 +33,10 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: always fall back to synthetic resources, remove synthetic behavior entirely, retain it behind an explicit runtime option.
   Chosen approach: fail live-state collection by default and permit `ALLOW_SYNTHETIC_LIVE_STATE=true` only for local demonstrations.
   Consequences: real analyses fail clearly when cluster access is unavailable; demo output can still be generated but must be treated as synthetic.
+
+- Date: 2026-05-25
+  Decision: Initial ignore-rule evaluation supports exact field-path matching within a workspace.
+  Context: The schema contains persisted ignore rules, but the worker previously ignored them. A broad or implicit expression language would make suppression difficult to reason about before rule-management and audit surfaces exist.
+  Options considered: keep rules inactive until UI work, interpret expressions as glob or regular-expression patterns, implement exact field-path matching first.
+  Chosen approach: load active rules for an application's workspace and suppress only candidates whose canonical field path exactly matches `match_expression`.
+  Consequences: common known-noise fields can be suppressed deterministically across a workspace; resource-specific matching, wildcard matching, management endpoints, and persisted suppression audit records remain future work.
