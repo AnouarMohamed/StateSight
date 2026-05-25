@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     container_name: statesight-postgres
     restart: unless-stopped
     environment:
@@ -18,7 +18,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
     container_name: statesight-redis
     restart: unless-stopped
     ports:
@@ -76,13 +76,11 @@ services:
       dockerfile: deployments/docker/Dockerfile.web
     container_name: statesight-web
     restart: unless-stopped
-    environment:
-      DEV_API_PROXY_TARGET: http://api:8080
     depends_on:
       api:
         condition: service_started
     ports:
-      - "5173:5173"
+      - "5173:8080"
 
 volumes:
   statesight-postgres-data:
