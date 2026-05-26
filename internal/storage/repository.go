@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrConflict = errors.New("resource conflict")
-	ErrNotFound = errors.New("resource not found")
+	ErrConflict          = errors.New("resource conflict")
+	ErrNotFound          = errors.New("resource not found")
+	ErrWorkspaceMismatch = errors.New("resource belongs to another workspace")
 )
 
 type Repository struct {
@@ -43,4 +44,20 @@ func mapConflict(err error) error {
 		return ErrConflict
 	}
 	return err
+}
+
+func mapWorkspaceMismatch(err error) error {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23503" {
+		return err
+	}
+	switch pgErr.ConstraintName {
+	case "fk_applications_workspace_cluster",
+		"fk_applications_workspace_source",
+		"applications_cluster_id_fkey",
+		"applications_source_definition_id_fkey":
+		return fmt.Errorf("%w: %v", ErrWorkspaceMismatch, err)
+	default:
+		return err
+	}
 }

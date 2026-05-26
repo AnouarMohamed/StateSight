@@ -197,6 +197,10 @@ func (s *Server) handleCreateApplication(w http.ResponseWriter, r *http.Request)
 		Namespace:          req.Namespace,
 	})
 	if err != nil {
+		if errors.Is(err, storage.ErrWorkspaceMismatch) {
+			writeError(w, http.StatusBadRequest, "application_scope_invalid", "cluster and source_definition must belong to the selected workspace", s.responseMeta(r))
+			return
+		}
 		s.logger.Error("create application failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
 		writeError(w, http.StatusInternalServerError, "application_create_failed", "failed to create application", s.responseMeta(r))
 		return

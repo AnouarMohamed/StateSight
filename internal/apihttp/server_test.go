@@ -90,6 +90,14 @@ type applicationDetailsStore struct {
 	mockStore
 }
 
+type mismatchedApplicationStore struct {
+	mockStore
+}
+
+func (mismatchedApplicationStore) CreateApplication(context.Context, storage.CreateApplicationParams) (model.Application, error) {
+	return model.Application{}, storage.ErrWorkspaceMismatch
+}
+
 func (applicationDetailsStore) GetApplicationByID(context.Context, string) (model.Application, error) {
 	return model.Application{ID: "application-1"}, nil
 }
@@ -124,6 +132,19 @@ func TestGetApplicationIncludesSuppressionsAndIgnoreRules(t *testing.T) {
 	}
 	if len(response.Data.IgnoreRules) != 1 || response.Data.IgnoreRules[0].ID != "rule-1" {
 		t.Fatalf("expected ignore rule in application response, got %#v", response.Data.IgnoreRules)
+	}
+}
+
+func TestCreateApplicationRejectsMismatchedWorkspaceDependencies(t *testing.T) {
+	s := NewServer(mismatchedApplicationStore{}, mockQueue{}, slog.Default(), "", false)
+	body := bytes.NewBufferString(`{"workspace_id":"workspace-1","cluster_id":"cluster-from-workspace-2","source_definition_id":"source-1","name":"ledger-api","namespace":"payments"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/applications", body)
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d for mismatched application dependencies, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
 
