@@ -39,10 +39,10 @@ export function IncidentDetailPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <Link
         to={`/applications/${data.incident.application_id}`}
-        className="touch-target inline-flex items-center gap-2 text-sm text-ops-muted hover:text-ops-text"
+        className="touch-target inline-flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-ops-muted hover:text-ops-text"
       >
         <ArrowLeft aria-hidden="true" className="h-4 w-4" />
         Application
@@ -56,8 +56,8 @@ export function IncidentDetailPage() {
         <span className="font-mono text-xs">confidence {formatPercent(data.incident.confidence)}</span>
       </PageHeader>
 
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
-        <div className="min-w-0 space-y-5">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="min-w-0 space-y-4">
           <Panel>
             <PanelHeading title="Observed differences" count={data.fields.length} />
             {data.fields.length === 0 ? (
@@ -65,11 +65,11 @@ export function IncidentDetailPage() {
             ) : (
               <div className="divide-y divide-ops-border-muted">
                 {data.fields.map((field) => (
-                  <article key={field.id} className="min-w-0 px-4 py-4 sm:px-5">
+                  <article key={field.id} className="min-w-0 px-3 py-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="break-all font-mono text-xs text-ops-muted">{field.resource_ref}</p>
-                        <p className="mt-2 break-all font-mono text-sm text-ops-text">{field.field_path}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-ops-text">{field.field_path}</p>
                       </div>
                       <Badge label={field.difference_type} tone="warn" />
                     </div>
@@ -104,12 +104,12 @@ export function IncidentDetailPage() {
           ) : (
             <ol className="divide-y divide-ops-border-muted">
               {data.timeline.map((event, index) => (
-                <li key={`${event.at}-${event.type}-${index}`} className="px-4 py-3">
+                <li key={`${event.at}-${event.type}-${index}`} className="px-3 py-2.5">
                   <p className="flex items-center gap-2 text-xs text-ops-muted">
                     <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
                     {formatDate(event.at)}
                   </p>
-                  <p className="mt-2 break-words text-sm">{event.summary}</p>
+                  <p className="mt-2 break-words text-xs">{event.summary}</p>
                   <p className="mt-1 font-mono text-xs text-ops-muted">{event.type}</p>
                 </li>
               ))}
@@ -123,18 +123,18 @@ export function IncidentDetailPage() {
 
 function PanelHeading({ title, count }: { title: string; count: number }) {
   return (
-    <header className="flex items-center justify-between border-b border-ops-border px-4 py-3 sm:px-5">
-      <h2 className="text-sm font-semibold">{title}</h2>
-      <span className="rounded-md bg-ops-bg px-2 py-0.5 font-mono text-xs text-ops-muted">{count}</span>
+    <header className="flex items-center justify-between border-b border-ops-border-muted px-3 py-2">
+      <h2 className="text-[10px] uppercase tracking-[0.12em] text-ops-dim">{title}</h2>
+      <span className="bg-ops-panel-alt px-2 py-0.5 font-mono text-[10px] text-ops-muted">{count}</span>
     </header>
   );
 }
 
 function ValueCell({ label, value, changed = false }: { label: string; value: string; changed?: boolean }) {
   return (
-    <div className={`min-w-0 rounded-md border px-3 py-2 ${changed ? "border-ops-warn-border bg-ops-warn-soft" : "border-ops-border-muted bg-ops-panel-alt"}`}>
-      <dt className="text-xs text-ops-muted">{label}</dt>
-      <dd className="mt-1 break-all font-mono text-sm text-ops-text">{value}</dd>
+    <div className={`min-w-0 border px-3 py-2 ${changed ? "border-ops-warn-border bg-ops-warn-soft" : "border-ops-border-muted bg-ops-panel-alt"}`}>
+      <dt className="text-[10px] uppercase tracking-[0.08em] text-ops-muted">{label}</dt>
+      <dd className="mt-1 break-all font-mono text-xs text-ops-text">{value}</dd>
     </div>
   );
 }
@@ -160,15 +160,15 @@ function ProvenanceRecord({ record }: { record: EvidenceRecord }) {
   ]);
 
   return (
-    <article className="px-4 py-4 sm:px-5">
+    <article className="px-3 py-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <SourceIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-ops-muted" />
-          <h3 className="text-sm font-medium">{evidenceSourceLabel(record.source)}</h3>
+          <h3 className="text-xs font-medium">{evidenceSourceLabel(record.source)}</h3>
         </div>
         <Badge label={trust.label} tone={trust.tone} />
       </div>
-      <p className="mt-3 max-w-[72ch] break-words text-sm leading-6 text-ops-text">{record.detail}</p>
+      <p className="mt-3 max-w-[72ch] break-words text-xs leading-5 text-ops-text">{record.detail}</p>
       <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
         <div className="flex min-w-0 items-center gap-2">
           <UserRound aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-ops-muted" />
@@ -188,7 +188,7 @@ function ProvenanceRecord({ record }: { record: EvidenceRecord }) {
         ))}
       </dl>
       {isOwnership ? (
-        <p className="mt-3 rounded-md border border-ops-border-muted bg-ops-panel-alt px-3 py-2 text-xs leading-5 text-ops-muted">
+        <p className="mt-3 border border-ops-border-muted bg-ops-panel-alt px-3 py-2 text-xs leading-5 text-ops-muted">
           Field ownership identifies a reported manager; it does not prove who introduced the drift.
         </p>
       ) : null}
