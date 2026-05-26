@@ -89,3 +89,10 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: rely on handler checks, validate relationships in repository queries only, or enforce tenant consistency in PostgreSQL.
   Chosen approach: add composite foreign keys for application-to-cluster, application-to-source, and scoped-rule-to-application relationships, with API error handling for invalid application scope.
   Consequences: writes cannot create cross-workspace ownership relationships even outside the HTTP handler; deployment of the constraint intentionally fails until any legacy mismatched data is repaired.
+
+- Date: 2026-05-26
+  Decision: Expand semantic diff coverage through keyed metadata and Service routing maps before list-valued workload fields.
+  Context: Label and Service selector drift can materially change resource classification and traffic routing, while the existing first-container image field path is already part of exact ignore-rule behavior.
+  Options considered: replace current paths while adding broad workload comparison, compare raw manifests generically, or add stable keyed fields first without changing the established image path.
+  Chosen approach: normalize metadata labels and compare annotations, labels, and Service selectors by exact key with explicit absent values and deterministic ordering; map qualified keys exactly when reading Kubernetes `managedFields`; retain the existing first-container image field path.
+  Consequences: operators gain precise drift and ownership evidence for stable keyed fields without invalidating existing rules; container environment variables, volumes, resources, probes, and any container-path migration remain separately reviewable work.

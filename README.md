@@ -18,7 +18,7 @@ StateSight is **not** a deployment controller like Argo CD or Flux.
 
 ## Current Limitations (Intentional)
 
-- Semantic diffing currently covers resource presence, replica counts, first-container images, and annotations; it is not a complete Kubernetes diff engine.
+- Semantic diffing currently covers resource presence, replica counts, first-container images, annotations, metadata labels, and Service selectors; it is not a complete Kubernetes diff engine.
 - Live-state collection uses `kubectl` for a limited resource set rather than a Kubernetes client integration.
 - Evidence records provide Git/live-state provenance and exact Kubernetes `managedFields` ownership where available; they do not yet correlate audit logs or prove which actor caused drift.
 - GitHub webhook endpoint is baseline-only (not full GitHub App install/auth flow).
@@ -78,6 +78,8 @@ An ignore rule's `match_expression` is one exact drift field path, such as:
 - `spec.replicas`
 - `spec.template.spec.containers[0].image`
 - `metadata.annotations.example.com/managed-by`
+- `metadata.labels.app.kubernetes.io/name`
+- `spec.selector.app.kubernetes.io/name` for a Service
 
 Matching is case-sensitive and trims surrounding whitespace. Wildcards and regular expressions are not supported. Rules created through the application API or UI are scoped to that application and can optionally specify an exact `resource_ref`. Active resource-specific application rules are evaluated before application-wide rules, which are evaluated before inherited workspace rules. Within the same scope, the oldest matching rule is used first.
 

@@ -15,8 +15,14 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 - Every persisted incident records the Git source, source path, and analyzed revision that supplied its desired-state comparison.
 - Every persisted incident records the live collection source. `kubectl` observations are trusted collection evidence; explicit synthetic fallback records are marked untrusted.
-- The `kubectl` collector requests managed-field output explicitly. For drift fields currently supported by the semantic diff engine, the worker reads live-object `metadata.managedFields` and persists manager evidence only when `fieldsV1` contains the exact compared path. Container-image ownership is resolved through the live container name rather than an assumed list index.
+- The `kubectl` collector requests managed-field output explicitly. For drift fields currently supported by the semantic diff engine, the worker reads live-object `metadata.managedFields` and persists manager evidence only when `fieldsV1` contains the exact compared path. Qualified annotation, label, and Service selector keys are treated as single Kubernetes map keys; container-image ownership is resolved through the live container name rather than an assumed list index.
 - A reported field manager establishes ownership metadata only. It is not treated as proof of who caused the observed difference, and the worker does not invent actor identities when no such signal exists.
+
+## Semantic Diff Boundary
+
+- The worker emits semantic findings for resource presence, replica count, first-container image, annotation, metadata label, and Service selector differences.
+- Annotation, label, and Service selector values are compared by exact key; additions and removals are represented explicitly, and findings are ordered deterministically.
+- List-valued pod configuration such as environment variables, volumes, resource requests/limits, and probes is not yet semantically compared.
 
 ## Services
 
