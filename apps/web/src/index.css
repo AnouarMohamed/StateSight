@@ -6,6 +6,7 @@
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
   color: #e7e5e4;
   background-color: #0c0a09;
+  letter-spacing: 0;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -36,6 +37,28 @@ code,
 :focus-visible {
   outline: 2px solid #f97316;
   outline-offset: 2px;
+}
+
+@layer components {
+  .console-label {
+    @apply text-sm uppercase;
+    letter-spacing: 0;
+  }
+
+  .console-copy {
+    @apply text-sm;
+  }
+
+  .console-action {
+    @apply text-sm font-medium uppercase;
+    letter-spacing: 0;
+  }
+
+  .console-transition {
+    transition-duration: 150ms;
+    transition-property: background-color, border-color, color;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
 
 @media (pointer: coarse) {

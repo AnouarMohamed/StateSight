@@ -16,9 +16,9 @@ export function PageHeader({
   return (
     <header className="flex flex-wrap items-start justify-between gap-4 border-b border-ops-border-muted pb-3">
       <div className="min-w-0">
-        {label ? <p className="mb-1 text-[10px] uppercase tracking-[0.12em] text-ops-dim">{label}</p> : null}
+        {label ? <p className="console-label mb-1 text-ops-dim">{label}</p> : null}
         <h1 className="break-words text-base font-medium text-ops-text">{title}</h1>
-        {children ? <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ops-muted">{children}</div> : null}
+        {children ? <div className="console-copy mt-2 flex flex-wrap items-center gap-2 text-ops-muted">{children}</div> : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
@@ -34,9 +34,9 @@ export function Panel({ children, className = "", ...props }: HTMLAttributes<HTM
 }
 
 const buttonVariants = {
-  primary: "border-ops-action-border bg-ops-action text-ops-bg hover:bg-ops-action-hover",
-  secondary: "border-ops-border bg-ops-panel text-ops-text hover:bg-ops-shell-hover",
-  quiet: "border-transparent bg-transparent text-ops-accent hover:bg-ops-accent-soft"
+  primary: "border-ops-action-border bg-ops-action text-ops-bg hover:bg-ops-action-hover active:bg-ops-action-hover",
+  secondary: "border-ops-border bg-ops-panel text-ops-text hover:bg-ops-shell-hover active:bg-ops-panel-alt",
+  quiet: "border-transparent bg-transparent text-ops-accent hover:bg-ops-accent-soft active:bg-ops-accent-soft"
 } as const;
 
 export function ActionButton({
@@ -51,7 +51,7 @@ export function ActionButton({
 }) {
   return (
     <button
-      className={`touch-target inline-flex h-8 items-center justify-center gap-2 border px-3 text-[11px] font-medium uppercase tracking-[0.08em] transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${buttonVariants[variant]} ${className}`}
+      className={`console-action console-transition touch-target inline-flex h-8 items-center justify-center gap-2 border px-3 disabled:cursor-not-allowed disabled:opacity-55 ${buttonVariants[variant]} ${className}`}
       {...props}
     >
       {Icon ? <Icon aria-hidden="true" className="h-4 w-4 shrink-0" /> : null}
@@ -61,11 +61,11 @@ export function ActionButton({
 }
 
 export const actionLinkClass =
-  "touch-target inline-flex h-8 items-center justify-center gap-2 border border-ops-border bg-ops-panel px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-ops-text transition-colors hover:bg-ops-shell-hover";
+  "console-action console-transition touch-target inline-flex h-8 items-center justify-center gap-2 border border-ops-border bg-ops-panel px-3 text-ops-text hover:bg-ops-shell-hover active:bg-ops-panel-alt";
 
 export function LoadState({ children = "Loading..." }: { children?: ReactNode }) {
   return (
-    <Panel className="p-5" aria-busy="true">
+    <Panel className="p-5" aria-busy="true" role="status">
       <span className="sr-only">{children}</span>
       <div className="space-y-3">
         <div className="h-3 w-40 animate-pulse bg-ops-border-muted" />
@@ -78,7 +78,7 @@ export function LoadState({ children = "Loading..." }: { children?: ReactNode })
 
 export function ErrorState({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <Panel className="flex flex-wrap items-center justify-between gap-3 border-ops-bad-border bg-ops-bad-soft p-4 text-sm text-ops-bad">
+    <Panel className="flex flex-wrap items-center justify-between gap-3 border-ops-bad-border bg-ops-bad-soft p-4 text-sm text-ops-bad" role="alert">
       <span className="flex min-w-0 items-center gap-2">
         <AlertCircle aria-hidden="true" className="h-4 w-4 shrink-0" />
         <span className="break-words">{children}</span>
@@ -89,5 +89,5 @@ export function ErrorState({ children, action }: { children: ReactNode; action?:
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-8 font-mono text-xs text-ops-muted">{children}</p>;
+  return <p className="console-copy px-4 py-8 font-mono text-ops-muted">{children}</p>;
 }
