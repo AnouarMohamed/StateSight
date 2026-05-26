@@ -1,4 +1,2 @@
-// Package auth contains authentication and authorization integration points.
-//
-// TODO(statesight): add workspace membership and role checks once user auth is introduced.
+// Package auth verifies external identities and represents authenticated local principals.
 package auth

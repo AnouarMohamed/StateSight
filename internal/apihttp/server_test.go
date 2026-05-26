@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/AnouarMohamed/StateSight/internal/auth"
 	"github.com/AnouarMohamed/StateSight/internal/jobs"
 	"github.com/AnouarMohamed/StateSight/internal/storage"
 	"github.com/AnouarMohamed/StateSight/pkg/model"
@@ -61,6 +62,9 @@ func (m mockStore) GetIncidentDetails(context.Context, string) (model.IncidentDe
 func (m mockStore) GetIncidentTimeline(context.Context, string) ([]model.TimelineEvent, error) {
 	return nil, storage.ErrNotFound
 }
+func (m mockStore) GetUserIDByIdentity(context.Context, string, string) (string, error) {
+	return "user-1", nil
+}
 func (m mockStore) GetWorkspaceRole(context.Context, string, string) (string, error) {
 	return "admin", nil
 }
@@ -70,8 +74,28 @@ type mockQueue struct{}
 func (q mockQueue) Enqueue(context.Context, jobs.Message) error { return nil }
 func (q mockQueue) Ping(context.Context) error                  { return nil }
 
+type validAuthenticator struct{}
+
+func (validAuthenticator) Authenticate(context.Context, *http.Request) (auth.Identity, error) {
+	return auth.Identity{Issuer: "https://identity.example.test", Subject: "operator-1", Email: "operator@example.test"}, nil
+}
+
+type rejectingAuthenticator struct{}
+
+func (rejectingAuthenticator) Authenticate(context.Context, *http.Request) (auth.Identity, error) {
+	return auth.Identity{}, auth.ErrMissingBearerToken
+}
+
+type unprovisionedIdentityStore struct {
+	mockStore
+}
+
+func (unprovisionedIdentityStore) GetUserIDByIdentity(context.Context, string, string) (string, error) {
+	return "", storage.ErrNotFound
+}
+
 func TestHealthz(t *testing.T) {
-	s := NewServer(mockStore{}, mockQueue{}, slog.Default(), "", false)
+	s := NewServer(mockStore{}, mockQueue{}, slog.Default(), "", nil)
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
@@ -111,7 +135,7 @@ func (applicationDetailsStore) ListIgnoreRulesForApplication(context.Context, st
 }
 
 func TestGetApplicationIncludesSuppressionsAndIgnoreRules(t *testing.T) {
-	s := NewServer(applicationDetailsStore{}, mockQueue{}, slog.Default(), "", false)
+	s := NewServer(applicationDetailsStore{}, mockQueue{}, slog.Default(), "", nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/applications/application-1", nil)
 	rec := httptest.NewRecorder()
 
@@ -136,7 +160,7 @@ func TestGetApplicationIncludesSuppressionsAndIgnoreRules(t *testing.T) {
 }
 
 func TestCreateApplicationRejectsMismatchedWorkspaceDependencies(t *testing.T) {
-	s := NewServer(mismatchedApplicationStore{}, mockQueue{}, slog.Default(), "", false)
+	s := NewServer(mismatchedApplicationStore{}, mockQueue{}, slog.Default(), "", nil)
 	body := bytes.NewBufferString(`{"workspace_id":"workspace-1","cluster_id":"cluster-from-workspace-2","source_definition_id":"source-1","name":"ledger-api","namespace":"payments"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/applications", body)
 	rec := httptest.NewRecorder()
@@ -190,11 +214,9 @@ func (s *ignoreRuleMutationStore) DeleteIgnoreRuleForApplication(_ context.Conte
 
 func TestCreateIgnoreRuleScopesRuleToApplicationAndActor(t *testing.T) {
 	store := &ignoreRuleMutationStore{}
-	s := NewServer(store, mockQueue{}, slog.Default(), "", true)
+	s := NewServer(store, mockQueue{}, slog.Default(), "", validAuthenticator{})
 	body := bytes.NewBufferString(`{"name":"  HPA replicas ","match_expression":" spec.replicas ","resource_ref":" apps/v1/Deployment:payments/ledger-api ","reason":" autoscaler "}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/applications/application-1/ignore-rules", body)
-	req.Header.Set("X-User-ID", "user-1")
-	req.Header.Set("X-Workspace-ID", "workspace-1")
 	rec := httptest.NewRecorder()
 
 	s.Router().ServeHTTP(rec, req)
@@ -211,9 +233,52 @@ func TestCreateIgnoreRuleScopesRuleToApplicationAndActor(t *testing.T) {
 	}
 }
 
+func TestProtectedEndpointDoesNotTrustUserHeaders(t *testing.T) {
+	s := NewServer(mockStore{}, mockQueue{}, slog.Default(), "", rejectingAuthenticator{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/overview", nil)
+	req.Header.Set("X-User-ID", "user-1")
+	req.Header.Set("X-User-Email", "operator@example.test")
+	req.Header.Set("X-Workspace-ID", "workspace-1")
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d for forged identity headers, got %d", http.StatusUnauthorized, rec.Code)
+	}
+	if rec.Header().Get("WWW-Authenticate") != `Bearer realm="statesight"` {
+		t.Fatalf("expected Bearer challenge header, got %q", rec.Header().Get("WWW-Authenticate"))
+	}
+}
+
+func TestAuthenticatedOverviewRequiresSelectedWorkspace(t *testing.T) {
+	s := NewServer(mockStore{}, mockQueue{}, slog.Default(), "", validAuthenticator{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/overview", nil)
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d without selected workspace, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestAuthenticatedEndpointRejectsUnprovisionedIdentity(t *testing.T) {
+	s := NewServer(unprovisionedIdentityStore{}, mockQueue{}, slog.Default(), "", validAuthenticator{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/overview", nil)
+	req.Header.Set("X-Workspace-ID", "workspace-1")
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d for unprovisioned identity, got %d", http.StatusForbidden, rec.Code)
+	}
+}
+
 func TestSetIgnoreRuleActiveTargetsApplicationOwnedRule(t *testing.T) {
 	store := &ignoreRuleMutationStore{}
-	s := NewServer(store, mockQueue{}, slog.Default(), "", false)
+	s := NewServer(store, mockQueue{}, slog.Default(), "", nil)
 	req := httptest.NewRequest(http.MethodPatch, "/api/v1/applications/application-1/ignore-rules/rule-1", bytes.NewBufferString(`{"active":false}`))
 	rec := httptest.NewRecorder()
 
@@ -229,7 +294,7 @@ func TestSetIgnoreRuleActiveTargetsApplicationOwnedRule(t *testing.T) {
 
 func TestUpdateIgnoreRuleTargetsApplicationOwnedRuleAndTrimsFields(t *testing.T) {
 	store := &ignoreRuleMutationStore{}
-	s := NewServer(store, mockQueue{}, slog.Default(), "", false)
+	s := NewServer(store, mockQueue{}, slog.Default(), "", nil)
 	body := bytes.NewBufferString(`{"name":"  Keep HPA scale  ","match_expression":" spec.replicas ","resource_ref":" apps/v1/Deployment:payments/ledger-api ","reason":" controller owned "}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/applications/application-1/ignore-rules/rule-1", body)
 	rec := httptest.NewRecorder()
@@ -250,7 +315,7 @@ func TestUpdateIgnoreRuleTargetsApplicationOwnedRuleAndTrimsFields(t *testing.T)
 
 func TestDeleteIgnoreRuleTargetsApplicationOwnedRule(t *testing.T) {
 	store := &ignoreRuleMutationStore{}
-	s := NewServer(store, mockQueue{}, slog.Default(), "", false)
+	s := NewServer(store, mockQueue{}, slog.Default(), "", nil)
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/applications/application-1/ignore-rules/rule-1", nil)
 	rec := httptest.NewRecorder()
 

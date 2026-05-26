@@ -40,6 +40,7 @@ type Store interface {
 	MarkJobFailed(ctx context.Context, id, message string) error
 	GetIncidentDetails(ctx context.Context, id string) (model.IncidentDetails, error)
 	GetIncidentTimeline(ctx context.Context, incidentID string) ([]model.TimelineEvent, error)
+	GetUserIDByIdentity(ctx context.Context, issuer, subject string) (string, error)
 	GetWorkspaceRole(ctx context.Context, userID, workspaceID string) (string, error)
 }
 
@@ -54,17 +55,17 @@ type Server struct {
 	logger        *slog.Logger
 	webhookSecret string
 	metrics       *metrics
-	authRequired  bool
+	authenticator auth.Authenticator
 }
 
-func NewServer(store Store, queue JobQueue, logger *slog.Logger, webhookSecret string, authRequired bool) *Server {
+func NewServer(store Store, queue JobQueue, logger *slog.Logger, webhookSecret string, authenticator auth.Authenticator) *Server {
 	return &Server{
 		store:         store,
 		queue:         queue,
 		logger:        logger,
 		webhookSecret: webhookSecret,
 		metrics:       &metrics{},
-		authRequired:  authRequired,
+		authenticator: authenticator,
 	}
 }
 
@@ -80,21 +81,32 @@ func (s *Server) Router() http.Handler {
 	r.Get("/metrics", s.metrics.metricsHandler)
 
 	r.Route("/api/v1", func(v1 chi.Router) {
-		v1.Get("/overview", s.handleOverview)
-		v1.Get("/applications", s.handleListApplications)
-		v1.Post("/applications", s.handleCreateApplication)
-		v1.Get("/applications/{id}", s.handleGetApplication)
-		v1.Post("/applications/{id}/analyze", s.handleAnalyzeApplication)
-		v1.Post("/applications/{id}/ignore-rules", s.handleCreateIgnoreRule)
-		v1.Put("/applications/{id}/ignore-rules/{ruleID}", s.handleUpdateIgnoreRule)
-		v1.Patch("/applications/{id}/ignore-rules/{ruleID}", s.handleSetIgnoreRuleActive)
-		v1.Delete("/applications/{id}/ignore-rules/{ruleID}", s.handleDeleteIgnoreRule)
-		v1.Get("/incidents/{id}", s.handleGetIncident)
-		v1.Get("/incidents/{id}/timeline", s.handleGetIncidentTimeline)
+		if s.authenticator != nil {
+			v1.Group(func(protected chi.Router) {
+				protected.Use(s.authenticationMiddleware)
+				s.mountProtectedRoutes(protected)
+			})
+		} else {
+			s.mountProtectedRoutes(v1)
+		}
 		v1.Post("/github/webhook", s.handleGitHubWebhook)
 	})
 
 	return r
+}
+
+func (s *Server) mountProtectedRoutes(r chi.Router) {
+	r.Get("/overview", s.handleOverview)
+	r.Get("/applications", s.handleListApplications)
+	r.Post("/applications", s.handleCreateApplication)
+	r.Get("/applications/{id}", s.handleGetApplication)
+	r.Post("/applications/{id}/analyze", s.handleAnalyzeApplication)
+	r.Post("/applications/{id}/ignore-rules", s.handleCreateIgnoreRule)
+	r.Put("/applications/{id}/ignore-rules/{ruleID}", s.handleUpdateIgnoreRule)
+	r.Patch("/applications/{id}/ignore-rules/{ruleID}", s.handleSetIgnoreRuleActive)
+	r.Delete("/applications/{id}/ignore-rules/{ruleID}", s.handleDeleteIgnoreRule)
+	r.Get("/incidents/{id}", s.handleGetIncident)
+	r.Get("/incidents/{id}/timeline", s.handleGetIncidentTimeline)
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
@@ -123,16 +135,15 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		err      error
 	)
 
-	if s.authRequired {
-		principal, authErr := auth.PrincipalFromRequest(r)
-		if authErr != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized", "missing required authentication headers", s.responseMeta(r))
+	if s.authenticator != nil {
+		workspaceID, ok := s.selectedWorkspaceID(w, r)
+		if !ok {
 			return
 		}
-		if !s.authorizeWorkspace(w, r, principal.WorkspaceID, auth.RoleViewer) {
+		if !s.authorizeWorkspace(w, r, workspaceID, auth.RoleViewer) {
 			return
 		}
-		overview, err = s.store.GetOverviewByWorkspace(r.Context(), principal.WorkspaceID)
+		overview, err = s.store.GetOverviewByWorkspace(r.Context(), workspaceID)
 	} else {
 		overview, err = s.store.GetOverview(r.Context())
 	}
@@ -151,16 +162,15 @@ func (s *Server) handleListApplications(w http.ResponseWriter, r *http.Request) 
 		err  error
 	)
 
-	if s.authRequired {
-		principal, authErr := auth.PrincipalFromRequest(r)
-		if authErr != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized", "missing required authentication headers", s.responseMeta(r))
+	if s.authenticator != nil {
+		workspaceID, ok := s.selectedWorkspaceID(w, r)
+		if !ok {
 			return
 		}
-		if !s.authorizeWorkspace(w, r, principal.WorkspaceID, auth.RoleViewer) {
+		if !s.authorizeWorkspace(w, r, workspaceID, auth.RoleViewer) {
 			return
 		}
-		apps, err = s.store.ListApplicationsByWorkspace(r.Context(), principal.WorkspaceID)
+		apps, err = s.store.ListApplicationsByWorkspace(r.Context(), workspaceID)
 	} else {
 		apps, err = s.store.ListApplications(r.Context())
 	}
@@ -283,9 +293,11 @@ func (s *Server) handleCreateIgnoreRule(w http.ResponseWriter, r *http.Request) 
 	}
 
 	createdBy := "api"
-	if s.authRequired {
-		principal, _ := auth.PrincipalFromRequest(r)
-		createdBy = principal.UserID
+	if s.authenticator != nil {
+		principal, ok := auth.PrincipalFromContext(r.Context())
+		if ok {
+			createdBy = principal.UserID
+		}
 	}
 	rule, err := s.store.CreateIgnoreRule(r.Context(), storage.CreateIgnoreRuleParams{
 		WorkspaceID:     app.WorkspaceID,
@@ -602,46 +614,6 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		"job_type": job.JobType,
 		"status":   job.Status,
 	}, s.responseMeta(r))
-}
-
-func (s *Server) authorizeWorkspace(w http.ResponseWriter, r *http.Request, workspaceID, requiredRole string) bool {
-	if !s.authRequired {
-		return true
-	}
-
-	principal, err := auth.PrincipalFromRequest(r)
-	if err != nil {
-		code := "unauthorized"
-		message := "missing required authentication headers"
-		if errors.Is(err, auth.ErrMissingWorkspaceID) {
-			message = "missing X-Workspace-ID header"
-		}
-		writeError(w, http.StatusUnauthorized, code, message, s.responseMeta(r))
-		return false
-	}
-
-	if strings.TrimSpace(workspaceID) == "" || workspaceID != principal.WorkspaceID {
-		writeError(w, http.StatusForbidden, "workspace_forbidden", "workspace access denied", s.responseMeta(r))
-		return false
-	}
-
-	role, err := s.store.GetWorkspaceRole(r.Context(), principal.UserID, workspaceID)
-	if err != nil {
-		if err == storage.ErrNotFound {
-			writeError(w, http.StatusForbidden, "workspace_forbidden", "workspace membership not found", s.responseMeta(r))
-			return false
-		}
-		s.logger.Error("workspace role lookup failed", "error", err.Error(), "request_id", requestIDFromContext(r.Context()))
-		writeError(w, http.StatusInternalServerError, "workspace_auth_failed", "failed to evaluate workspace role", s.responseMeta(r))
-		return false
-	}
-
-	if !auth.HasRequiredRole(role, requiredRole) {
-		writeError(w, http.StatusForbidden, "insufficient_role", "role does not permit this action", s.responseMeta(r))
-		return false
-	}
-
-	return true
 }
 
 func (s *Server) responseMeta(r *http.Request) map[string]any {

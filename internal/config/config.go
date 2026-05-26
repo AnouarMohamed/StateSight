@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -19,6 +20,9 @@ type API struct {
 	Common
 	GitHubWebhookSecret string
 	AuthRequired        bool
+	OIDCIssuerURL       string
+	OIDCAudience        string
+	OIDCAllowInsecure   bool
 	HTTPPort            int
 	ReadHeaderTimeout   time.Duration
 }
@@ -38,13 +42,20 @@ func LoadAPI() (API, error) {
 	if err != nil {
 		return API{}, err
 	}
-	return API{
+	cfg := API{
 		Common:              common,
 		GitHubWebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
 		AuthRequired:        boolFromEnv("AUTH_REQUIRED", false),
+		OIDCIssuerURL:       strings.TrimSpace(os.Getenv("OIDC_ISSUER_URL")),
+		OIDCAudience:        strings.TrimSpace(os.Getenv("OIDC_AUDIENCE")),
+		OIDCAllowInsecure:   boolFromEnv("OIDC_ALLOW_INSECURE_ISSUER", false),
 		HTTPPort:            port,
 		ReadHeaderTimeout:   5 * time.Second,
-	}, nil
+	}
+	if err := validateAPIAuth(cfg); err != nil {
+		return API{}, err
+	}
+	return cfg, nil
 }
 
 func LoadWorker() (Worker, error) {
@@ -101,4 +112,25 @@ func boolFromEnv(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func validateAPIAuth(cfg API) error {
+	if !cfg.AuthRequired {
+		return nil
+	}
+	if cfg.OIDCIssuerURL == "" {
+		return fmt.Errorf("OIDC_ISSUER_URL is required when AUTH_REQUIRED=true")
+	}
+	if cfg.OIDCAudience == "" {
+		return fmt.Errorf("OIDC_AUDIENCE is required when AUTH_REQUIRED=true")
+	}
+
+	issuer, err := url.Parse(cfg.OIDCIssuerURL)
+	if err != nil || issuer.Host == "" || (issuer.Scheme != "https" && issuer.Scheme != "http") {
+		return fmt.Errorf("OIDC_ISSUER_URL must be a valid HTTP(S) issuer URL")
+	}
+	if issuer.Scheme != "https" && !cfg.OIDCAllowInsecure {
+		return fmt.Errorf("OIDC_ISSUER_URL must use HTTPS unless OIDC_ALLOW_INSECURE_ISSUER=true")
+	}
+	return nil
 }

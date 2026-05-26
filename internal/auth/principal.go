@@ -1,35 +1,27 @@
 package auth
 
-import (
-	"errors"
-	"net/http"
-	"strings"
-)
+import "context"
 
-var (
-	ErrMissingUserID      = errors.New("missing X-User-ID header")
-	ErrMissingWorkspaceID = errors.New("missing X-Workspace-ID header")
-)
-
-type Principal struct {
-	UserID      string
-	WorkspaceID string
-	Email       string
+type Identity struct {
+	Issuer  string
+	Subject string
+	Email   string
 }
 
-func PrincipalFromRequest(r *http.Request) (Principal, error) {
-	userID := strings.TrimSpace(r.Header.Get("X-User-ID"))
-	if userID == "" {
-		return Principal{}, ErrMissingUserID
-	}
-	workspaceID := strings.TrimSpace(r.Header.Get("X-Workspace-ID"))
-	if workspaceID == "" {
-		return Principal{}, ErrMissingWorkspaceID
-	}
+type Principal struct {
+	UserID  string
+	Issuer  string
+	Subject string
+	Email   string
+}
 
-	return Principal{
-		UserID:      userID,
-		WorkspaceID: workspaceID,
-		Email:       strings.TrimSpace(r.Header.Get("X-User-Email")),
-	}, nil
+type principalContextKey struct{}
+
+func ContextWithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
+func PrincipalFromContext(ctx context.Context) (Principal, bool) {
+	principal, ok := ctx.Value(principalContextKey{}).(Principal)
+	return principal, ok
 }
