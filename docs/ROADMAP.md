@@ -23,6 +23,7 @@
 - verify OIDC bearer identities at the API boundary before applying workspace RBAC
 - enforce workspace-qualified application and scoped-rule relationships in persistence
 - compare metadata labels and Service selectors with deterministic key-level findings and exact field-ownership lookup
+- compare named pod-template container presence, environment entries, and Kubernetes-normalized resource quantities
 
 ## Next: Trustworthy Analysis
 
@@ -30,7 +31,7 @@
 - design deliberate workspace-wide ignore-rule administration with authorization and blast-radius controls
 - improve incident grouping and semantic normalization/diff coverage
 - complete protected operator access with browser OIDC login and managed identity provisioning workflows
-- expand semantic diff coverage for container environment variables, volumes, resource requests/limits, and probes
+- expand semantic diff coverage for volumes, probes, and a compatible named-container image path
 - add alerting integrations (webhooks, Slack) for new incidents and severity changes
 
 ## Later: Integrations and Operations
