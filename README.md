@@ -4,7 +4,7 @@ StateSight is a GitOps forensic platform for Kubernetes.
 
 Its purpose is to compare desired state from Git with live cluster state, explain drift, group it into incidents, and recommend actions (`ignore`, `monitor`, `investigate`, `reconcile`).
 
-StateSight is **not** a deployment controller and does not replace Argo CD or Flux.
+StateSight is **not** a deployment controller like Argo CD or Flux.
 
 ## What This Baseline Includes
 
@@ -70,6 +70,10 @@ Matching is case-sensitive and trims surrounding whitespace. Wildcards and regul
 Existing rows with no `application_id` remain inherited workspace rules for compatibility. They are displayed on application details as read-only because changing one affects every application in that workspace.
 
 A suppressed candidate does not create a drift incident. The worker stores a `suppressed_findings` audit record linked to the analysis snapshots, including the matching rule name and reason captured at analysis time. Application details expose the audit history under `Suppressed` and rule management under `Ignore Rules`. Managed application rules can currently be created, enabled, and disabled; editing, deletion, and workspace-rule administration are not implemented.
+
+## Operator Interface
+
+The web application is a dense, dark investigation console designed around scanning and evidence review. It surfaces compared field values, provenance trust state, absent attribution, and Kubernetes ownership caveats without implying unobserved causality. The visual and interaction contract is recorded in `PRODUCT.md` and `DESIGN.md`.
 
 ## Architecture Overview
 
