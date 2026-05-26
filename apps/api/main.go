@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/AnouarMohamed/StateSight/internal/apihttp"
+	"github.com/AnouarMohamed/StateSight/internal/auth"
 	"github.com/AnouarMohamed/StateSight/internal/config"
 	"github.com/AnouarMohamed/StateSight/internal/jobs"
 	"github.com/AnouarMohamed/StateSight/internal/observability"
@@ -47,7 +48,16 @@ func run() error {
 	defer queue.Close()
 
 	store := storage.NewRepository(pool)
-	server := apihttp.NewServer(store, queue, logger, cfg.GitHubWebhookSecret, cfg.AuthRequired)
+	var authenticator auth.Authenticator
+	if cfg.AuthRequired {
+		discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		authenticator, err = auth.NewOIDCAuthenticator(discoveryCtx, cfg.OIDCIssuerURL, cfg.OIDCAudience, cfg.OIDCAllowInsecure)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("initialize OIDC authentication: %w", err)
+		}
+	}
+	server := apihttp.NewServer(store, queue, logger, cfg.GitHubWebhookSecret, authenticator)
 
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPPort),

@@ -41,7 +41,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       GITHUB_WEBHOOK_SECRET: dev-secret
       LOG_LEVEL: info
-      AUTH_REQUIRED: "false"
+      AUTH_REQUIRED: "${AUTH_REQUIRED:-false}"
+      OIDC_ISSUER_URL: "${OIDC_ISSUER_URL:-}"
+      OIDC_AUDIENCE: "${OIDC_AUDIENCE:-}"
+      OIDC_ALLOW_INSECURE_ISSUER: "${OIDC_ALLOW_INSECURE_ISSUER:-false}"
     depends_on:
       postgres:
         condition: service_healthy

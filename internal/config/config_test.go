@@ -39,3 +39,37 @@ func TestLoadWorkerDisablesSyntheticLiveStateByDefault(t *testing.T) {
 		t.Fatal("expected synthetic live state to be disabled by default")
 	}
 }
+
+func TestLoadAPIRequiresOIDCConfigurationWhenAuthenticationEnabled(t *testing.T) {
+	t.Setenv("AUTH_REQUIRED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "")
+	t.Setenv("OIDC_AUDIENCE", "")
+
+	if _, err := LoadAPI(); err == nil {
+		t.Fatal("expected missing OIDC configuration to fail")
+	}
+}
+
+func TestLoadAPIRejectsInsecureOIDCIssuerByDefault(t *testing.T) {
+	t.Setenv("AUTH_REQUIRED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "http://identity.example.test")
+	t.Setenv("OIDC_AUDIENCE", "statesight-api")
+
+	if _, err := LoadAPI(); err == nil {
+		t.Fatal("expected insecure OIDC issuer to fail without an explicit local-development override")
+	}
+}
+
+func TestLoadAPIAcceptsConfiguredOIDCBoundary(t *testing.T) {
+	t.Setenv("AUTH_REQUIRED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "https://identity.example.test")
+	t.Setenv("OIDC_AUDIENCE", "statesight-api")
+
+	cfg, err := LoadAPI()
+	if err != nil {
+		t.Fatalf("load api config: %v", err)
+	}
+	if !cfg.AuthRequired || cfg.OIDCIssuerURL != "https://identity.example.test" || cfg.OIDCAudience != "statesight-api" {
+		t.Fatalf("unexpected OIDC configuration: %#v", cfg)
+	}
+}

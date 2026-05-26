@@ -16,22 +16,27 @@
 - pass worker runtime configuration to source and cluster adapters
 - execute active workspace ignore rules for exact drift field-path matches
 - persist and surface audit records for suppressed findings
-- manage application-scoped ignore rules with optional exact resource matching
+- manage application-scoped ignore rules with optional exact resource matching and lifecycle controls
 - enforce merge-gating CI, security analysis, migration smoke verification, and deployable-image scanning
 - derive incident evidence from Git revisions, live collection sources, and exact Kubernetes field ownership
 - present drift and provenance in a compact evidence-first operator console
+- verify OIDC bearer identities at the API boundary before applying workspace RBAC
+- enforce workspace-qualified application and scoped-rule relationships in persistence
 
 ## Next: Trustworthy Analysis
 
 - correlate provenance with audit, deployment, and controller signals without inferring causality from ownership alone
-- extend ignore-rule administration with edit/delete flows and deliberate workspace-wide controls
+- design deliberate workspace-wide ignore-rule administration with authorization and blast-radius controls
 - improve incident grouping and semantic normalization/diff coverage
-- replace trusted request headers with a real authentication integration
+- complete protected operator access with browser OIDC login and managed identity provisioning workflows
+- expand semantic diff coverage (env vars, volumes, resources, labels, annotations, probes, service selectors)
+- add alerting integrations (webhooks, Slack) for new incidents and severity changes
 
 ## Later: Integrations and Operations
 
 - support GitOps rendering and controller integrations
 - deepen Kubernetes collection and multi-cluster operational controls
 - harden reliability, observability, deployment, and scale behavior
+- add multi-cluster views with clear scoping and per-cluster drift summaries
 
 Roadmap is expected to evolve as implementation learns from real usage.

@@ -11,7 +11,7 @@ StateSight is **not** a deployment controller like Argo CD or Flux.
 - Go API service with versioned routes, request IDs, structured JSON responses, health/readiness, and basic metrics.
 - Go worker service that consumes Redis queue jobs and writes deterministic analysis outputs to Postgres.
 - React + TypeScript + Vite + Tailwind web app with routed pages and API-backed data loading.
-- PostgreSQL migrations for core domain entities, suppression audit records, and scoped ignore rules.
+- PostgreSQL migrations for core domain entities, suppression audit records, scoped ignore rules, provisioned OIDC identities, and workspace-qualified relationships.
 - Seed workflow with realistic sample data.
 - Docker Compose local stack for Postgres, Redis, API, worker, and web.
 - Makefile commands for setup, migrate, seed, run, format, test, and docs checks.
@@ -23,19 +23,33 @@ StateSight is **not** a deployment controller like Argo CD or Flux.
 - Evidence records provide Git/live-state provenance and exact Kubernetes `managedFields` ownership where available; they do not yet correlate audit logs or prove which actor caused drift.
 - GitHub webhook endpoint is baseline-only (not full GitHub App install/auth flow).
 - Git desired-state ingestion reads plain YAML/JSON manifests; Helm, Kustomize, Argo CD, and Flux integrations are not implemented.
+- The web client does not yet implement an interactive OIDC sign-in flow; authenticated deployments currently expose the verified API boundary for an integrated client or gateway.
 - No auto-remediation.
 
-## Auth and RBAC Baseline
+## Authentication and RBAC
 
-API supports workspace-aware RBAC boundaries when `AUTH_REQUIRED=true`.
+Local demo mode defaults to `AUTH_REQUIRED=false`. When `AUTH_REQUIRED=true`, the API requires a verified OIDC JWT bearer token for operator API endpoints. The GitHub webhook keeps its independent HMAC signature validation path.
 
-Expected request headers in auth-enabled mode:
+Required API configuration:
 
-- `X-User-ID`
-- `X-Workspace-ID`
-- `X-User-Email` (optional)
+- `OIDC_ISSUER_URL`: OIDC discovery issuer URL.
+- `OIDC_AUDIENCE`: expected token audience for the StateSight API.
+- `OIDC_ALLOW_INSECURE_ISSUER`: defaults to `false`; enable only for a local plain-HTTP identity provider.
 
-Roles come from `workspace_memberships` (`viewer`, `editor`, `admin`).
+At startup the API discovers the provider and rejects an auth-enabled configuration that cannot be initialized. For each protected request it validates the bearer token signature through the discovered JWKS, issuer, audience, and token lifetime. Production issuer and JWKS URLs must use HTTPS.
+
+Verified `iss` and `sub` claims map to a local user through `user_identities`; unmapped identities are denied. Roles continue to come from `workspace_memberships` (`viewer`, `editor`, `admin`). `X-User-ID` and `X-User-Email` are not authentication inputs and are not sent by the web client.
+
+`GET /api/v1/overview` and `GET /api/v1/applications` additionally require `X-Workspace-ID` to choose the workspace being viewed. That header selects scope only: the authenticated local user must hold a membership for the selected workspace. Resource-addressed endpoints derive the workspace from the stored resource before enforcing membership.
+
+The database enforces that an application's cluster and source definition belong to its workspace, and that an application-scoped ignore rule belongs to the same workspace as its application. A migration will fail if legacy data violates those tenant relationships; repair that data before deploying the constraint.
+
+Identity provisioning is intentionally administrative until a managed enrollment flow exists. After creating a local user and its workspace membership, bind its verified provider identity using an operator-controlled migration or SQL statement:
+
+```sql
+INSERT INTO user_identities (issuer, subject, user_id)
+VALUES ('https://identity.example.com', '<provider-subject>', '<local-user-uuid>');
+```
 
 ## Analysis Safety and Configuration
 
@@ -112,6 +126,8 @@ cp apps/web/.env.example apps/web/.env
 
 During `npm run dev`, Vite proxies `/api` to the local API by default; keep `VITE_API_BASE_URL` empty for that workflow. Docker Compose serves the built web application through Nginx on port `5173`, with Nginx proxying API requests to the API container.
 
+The checked-in web configuration is for unauthenticated local demonstration. Enabling `AUTH_REQUIRED=true` requires an OIDC-capable client or gateway that supplies `Authorization: Bearer <token>`; browser authorization-code/PKCE login remains follow-up work.
+
 ### 3) Start Infrastructure + Services
 
 ```bash
@@ -185,5 +201,5 @@ Application detail responses include `incidents`, `suppressions`, and applicable
 1. Correlate persisted provenance with audit, deployment, or controller signals without treating field ownership as causality.
 2. Add deliberate workspace-wide rule management with an appropriate authorization and blast-radius review boundary.
 3. Expand normalization, diff coverage, and incident grouping with focused tests.
-4. Replace header-trusted identity with an authenticated workspace access flow.
+4. Complete the protected operator access flow with browser OIDC login and managed identity provisioning on top of the verified API bearer boundary.
 5. Add GitOps rendering/integration support and hardened Kubernetes collection.

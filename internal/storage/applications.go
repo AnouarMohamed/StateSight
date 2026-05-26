@@ -106,7 +106,7 @@ func (r *Repository) CreateApplication(ctx context.Context, params CreateApplica
 		&app.UpdatedAt,
 	)
 	if err != nil {
-		return model.Application{}, fmt.Errorf("create application: %w", err)
+		return model.Application{}, fmt.Errorf("create application: %w", mapWorkspaceMismatch(err))
 	}
 	return app, nil
 }
