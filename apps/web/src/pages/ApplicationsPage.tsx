@@ -55,6 +55,11 @@ export function ApplicationsPage() {
       </PageHeader>
 
       {analyzeMutation.error ? <ErrorState>Unable to queue analysis: {(analyzeMutation.error as Error).message}</ErrorState> : null}
+      {analyzeMutation.isSuccess ? (
+        <p className="console-copy text-ops-good" role="status">
+          Analysis job queued.
+        </p>
+      ) : null}
 
       <Panel>
         <div className="flex flex-wrap items-center justify-end gap-4 border-b border-ops-border-muted px-3 py-2">
@@ -62,8 +67,10 @@ export function ApplicationsPage() {
             <span className="sr-only">Filter applications</span>
             <Search aria-hidden="true" className="absolute left-2.5 top-2 h-3.5 w-3.5 text-ops-dim" />
             <input
-              className="h-8 w-full border border-ops-border bg-ops-bg px-2.5 pl-8 text-xs text-ops-text placeholder:text-ops-dim"
+              autoComplete="off"
+              className="console-copy h-8 w-full border border-ops-border bg-ops-bg px-2.5 pl-8 text-ops-text placeholder:text-ops-dim"
               placeholder="Filter applications"
+              type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -75,8 +82,8 @@ export function ApplicationsPage() {
         ) : (
           <>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-xs">
-                <thead className="bg-ops-panel-alt text-left text-[10px] uppercase tracking-[0.12em] text-ops-dim">
+              <table className="console-copy w-full">
+                <thead className="console-label bg-ops-panel-alt text-left text-ops-dim">
                   <tr>
                     <th className="px-3 py-2 font-normal">Application</th>
                     <th className="px-3 py-2 font-normal">Namespace</th>
@@ -87,7 +94,7 @@ export function ApplicationsPage() {
                 </thead>
                 <tbody className="divide-y divide-ops-border-muted">
                   {applications.map((app) => (
-                    <tr key={app.id} className="transition-colors hover:bg-ops-panel-alt">
+                    <tr key={app.id} className="console-transition hover:bg-ops-panel-alt">
                       <td className="px-3 py-2.5">
                         <Link className="break-words font-medium text-ops-accent hover:underline" to={`/applications/${app.id}`}>
                           {app.name}
@@ -101,6 +108,7 @@ export function ApplicationsPage() {
                       <td className="px-3 py-2.5">
                         <div className="flex justify-end gap-2">
                           <ActionButton
+                            aria-busy={analyzeMutation.isPending && analyzeMutation.variables === app.id}
                             icon={Play}
                             onClick={() => analyzeMutation.mutate(app.id)}
                             disabled={analyzeMutation.isPending}
@@ -124,22 +132,28 @@ export function ApplicationsPage() {
             </div>
             <div className="divide-y divide-ops-border-muted md:hidden">
               {applications.map((app) => (
-                <article key={app.id} className="space-y-3 px-4 py-4">
+                <article key={app.id} className="space-y-3 px-4 py-4 text-sm">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link className="break-words font-medium text-ops-accent" to={`/applications/${app.id}`}>
                         {app.name}
                       </Link>
-                      <p className="mt-1 break-all font-mono text-xs text-ops-muted">{app.namespace}</p>
+                      <p className="mt-1 break-all font-mono text-ops-muted">{app.namespace}</p>
                     </div>
                     <Badge label={app.status} tone={severityTone(app.status === "active" ? "low" : "medium")} />
                   </div>
-                  <p className="text-xs text-ops-muted">Updated {formatDate(app.updated_at)}</p>
+                  <p className="text-ops-muted">Updated {formatDate(app.updated_at)}</p>
                   <div className="flex gap-2">
-                    <ActionButton icon={Play} onClick={() => analyzeMutation.mutate(app.id)} disabled={analyzeMutation.isPending} type="button">
+                    <ActionButton
+                      aria-busy={analyzeMutation.isPending && analyzeMutation.variables === app.id}
+                      icon={Play}
+                      onClick={() => analyzeMutation.mutate(app.id)}
+                      disabled={analyzeMutation.isPending}
+                      type="button"
+                    >
                       Analyze
                     </ActionButton>
-                    <Link className="touch-target inline-flex h-8 items-center gap-2 px-3 text-xs font-medium uppercase tracking-[0.08em] text-ops-accent" to={`/applications/${app.id}`}>
+                    <Link className="console-action console-transition touch-target inline-flex h-8 items-center gap-2 px-3 text-ops-accent hover:bg-ops-accent-soft active:bg-ops-accent-soft" to={`/applications/${app.id}`}>
                       Open
                       <ArrowRight aria-hidden="true" className="h-4 w-4" />
                     </Link>

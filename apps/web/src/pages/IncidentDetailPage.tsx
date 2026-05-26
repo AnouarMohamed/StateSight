@@ -42,7 +42,7 @@ export function IncidentDetailPage() {
     <section className="space-y-4">
       <Link
         to={`/applications/${data.incident.application_id}`}
-        className="touch-target inline-flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-ops-muted hover:text-ops-text"
+        className="console-action console-transition touch-target inline-flex items-center gap-2 text-ops-muted hover:text-ops-text active:text-ops-text"
       >
         <ArrowLeft aria-hidden="true" className="h-4 w-4" />
         Application
@@ -53,7 +53,7 @@ export function IncidentDetailPage() {
         <Badge label={data.incident.category} />
         <Badge label={data.incident.severity} tone={severityTone(data.incident.severity)} />
         <Badge label={data.incident.recommended_action} tone={recommendationTone(data.incident.recommended_action)} />
-        <span className="font-mono text-xs">confidence {formatPercent(data.incident.confidence)}</span>
+        <span className="font-mono">confidence {formatPercent(data.incident.confidence)}</span>
       </PageHeader>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
@@ -68,8 +68,8 @@ export function IncidentDetailPage() {
                   <article key={field.id} className="min-w-0 px-3 py-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="break-all font-mono text-xs text-ops-muted">{field.resource_ref}</p>
-                        <p className="mt-2 break-all font-mono text-xs text-ops-text">{field.field_path}</p>
+                        <p className="console-copy break-all font-mono text-ops-muted">{field.resource_ref}</p>
+                        <p className="console-copy mt-2 break-all font-mono text-ops-text">{field.field_path}</p>
                       </div>
                       <Badge label={field.difference_type} tone="warn" />
                     </div>
@@ -105,12 +105,12 @@ export function IncidentDetailPage() {
             <ol className="divide-y divide-ops-border-muted">
               {data.timeline.map((event, index) => (
                 <li key={`${event.at}-${event.type}-${index}`} className="px-3 py-2.5">
-                  <p className="flex items-center gap-2 text-xs text-ops-muted">
+                  <p className="console-copy flex items-center gap-2 text-ops-muted">
                     <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
                     {formatDate(event.at)}
                   </p>
-                  <p className="mt-2 break-words text-xs">{event.summary}</p>
-                  <p className="mt-1 font-mono text-xs text-ops-muted">{event.type}</p>
+                  <p className="console-copy mt-2 break-words">{event.summary}</p>
+                  <p className="console-copy mt-1 font-mono text-ops-muted">{event.type}</p>
                 </li>
               ))}
             </ol>
@@ -124,8 +124,8 @@ export function IncidentDetailPage() {
 function PanelHeading({ title, count }: { title: string; count: number }) {
   return (
     <header className="flex items-center justify-between border-b border-ops-border-muted px-3 py-2">
-      <h2 className="text-[10px] uppercase tracking-[0.12em] text-ops-dim">{title}</h2>
-      <span className="bg-ops-panel-alt px-2 py-0.5 font-mono text-[10px] text-ops-muted">{count}</span>
+      <h2 className="console-label text-ops-dim">{title}</h2>
+      <span className="console-copy bg-ops-panel-alt px-2 py-0.5 font-mono text-ops-muted">{count}</span>
     </header>
   );
 }
@@ -133,8 +133,8 @@ function PanelHeading({ title, count }: { title: string; count: number }) {
 function ValueCell({ label, value, changed = false }: { label: string; value: string; changed?: boolean }) {
   return (
     <div className={`min-w-0 border px-3 py-2 ${changed ? "border-ops-warn-border bg-ops-warn-soft" : "border-ops-border-muted bg-ops-panel-alt"}`}>
-      <dt className="text-[10px] uppercase tracking-[0.08em] text-ops-muted">{label}</dt>
-      <dd className="mt-1 break-all font-mono text-xs text-ops-text">{value}</dd>
+      <dt className="console-label text-ops-muted">{label}</dt>
+      <dd className="console-copy mt-1 break-all font-mono text-ops-text">{value}</dd>
     </div>
   );
 }
@@ -164,21 +164,25 @@ function ProvenanceRecord({ record }: { record: EvidenceRecord }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <SourceIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-ops-muted" />
-          <h3 className="text-xs font-medium">{evidenceSourceLabel(record.source)}</h3>
+          <h3 className="console-copy font-medium">{evidenceSourceLabel(record.source)}</h3>
         </div>
         <Badge label={trust.label} tone={trust.tone} />
       </div>
-      <p className="mt-3 max-w-[72ch] break-words text-xs leading-5 text-ops-text">{record.detail}</p>
-      <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <UserRound aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-ops-muted" />
-          <dt className="text-ops-muted">Actor</dt>
-          <dd className="break-all font-mono text-ops-text">{actorLabel(record.actor)}</dd>
+      <p className="console-copy mt-3 max-w-[72ch] break-words leading-5 text-ops-text">{record.detail}</p>
+      <dl className="console-copy mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        <div className="min-w-0 sm:flex sm:items-center sm:gap-2">
+          <dt className="flex items-center gap-2 text-ops-muted">
+            <UserRound aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            Actor
+          </dt>
+          <dd className="mt-1 break-all font-mono text-ops-text sm:mt-0">{actorLabel(record.actor)}</dd>
         </div>
-        <div className="flex items-center gap-2">
-          <CircleCheck aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-ops-muted" />
-          <dt className="text-ops-muted">Confidence</dt>
-          <dd className="font-mono text-ops-text">{formatPercent(record.confidence)}</dd>
+        <div className="min-w-0 sm:flex sm:items-center sm:gap-2">
+          <dt className="flex items-center gap-2 text-ops-muted">
+            <CircleCheck aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+            Confidence
+          </dt>
+          <dd className="mt-1 font-mono text-ops-text sm:mt-0">{formatPercent(record.confidence)}</dd>
         </div>
         {facts.map(([label, value]) => (
           <div className="min-w-0" key={label}>
@@ -188,7 +192,7 @@ function ProvenanceRecord({ record }: { record: EvidenceRecord }) {
         ))}
       </dl>
       {isOwnership ? (
-        <p className="mt-3 border border-ops-border-muted bg-ops-panel-alt px-3 py-2 text-xs leading-5 text-ops-muted">
+        <p className="console-copy mt-3 border border-ops-border-muted bg-ops-panel-alt px-3 py-2 leading-5 text-ops-muted">
           Field ownership identifies a reported manager; it does not prove who introduced the drift.
         </p>
       ) : null}

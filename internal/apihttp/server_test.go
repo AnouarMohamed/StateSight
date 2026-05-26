@@ -44,9 +44,13 @@ func (m mockStore) ListIgnoreRulesForApplication(context.Context, string, string
 func (m mockStore) CreateIgnoreRule(context.Context, storage.CreateIgnoreRuleParams) (model.IgnoreRule, error) {
 	return model.IgnoreRule{}, nil
 }
+func (m mockStore) UpdateIgnoreRuleForApplication(context.Context, string, string, storage.UpdateIgnoreRuleParams) (model.IgnoreRule, error) {
+	return model.IgnoreRule{}, nil
+}
 func (m mockStore) SetIgnoreRuleActiveForApplication(context.Context, string, string, bool) (model.IgnoreRule, error) {
 	return model.IgnoreRule{}, nil
 }
+func (m mockStore) DeleteIgnoreRuleForApplication(context.Context, string, string) error { return nil }
 func (m mockStore) CreateJob(context.Context, storage.CreateJobParams) (model.Job, error) {
 	return model.Job{}, nil
 }
@@ -126,8 +130,11 @@ func TestGetApplicationIncludesSuppressionsAndIgnoreRules(t *testing.T) {
 type ignoreRuleMutationStore struct {
 	mockStore
 	created storage.CreateIgnoreRuleParams
+	updated storage.UpdateIgnoreRuleParams
 	ruleID  string
+	appID   string
 	active  bool
+	deleted bool
 }
 
 func (ignoreRuleMutationStore) GetApplicationByID(context.Context, string) (model.Application, error) {
@@ -141,8 +148,23 @@ func (s *ignoreRuleMutationStore) CreateIgnoreRule(_ context.Context, params sto
 
 func (s *ignoreRuleMutationStore) SetIgnoreRuleActiveForApplication(_ context.Context, ruleID, applicationID string, active bool) (model.IgnoreRule, error) {
 	s.ruleID = ruleID
+	s.appID = applicationID
 	s.active = active
 	return model.IgnoreRule{ID: ruleID, ApplicationID: applicationID, Active: active}, nil
+}
+
+func (s *ignoreRuleMutationStore) UpdateIgnoreRuleForApplication(_ context.Context, ruleID, applicationID string, params storage.UpdateIgnoreRuleParams) (model.IgnoreRule, error) {
+	s.ruleID = ruleID
+	s.appID = applicationID
+	s.updated = params
+	return model.IgnoreRule{ID: ruleID, ApplicationID: applicationID, Name: params.Name}, nil
+}
+
+func (s *ignoreRuleMutationStore) DeleteIgnoreRuleForApplication(_ context.Context, ruleID, applicationID string) error {
+	s.ruleID = ruleID
+	s.appID = applicationID
+	s.deleted = true
+	return nil
 }
 
 func TestCreateIgnoreRuleScopesRuleToApplicationAndActor(t *testing.T) {
@@ -179,7 +201,44 @@ func TestSetIgnoreRuleActiveTargetsApplicationOwnedRule(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if store.ruleID != "rule-1" || store.active {
-		t.Fatalf("expected rule to be disabled, got id=%q active=%t", store.ruleID, store.active)
+	if store.ruleID != "rule-1" || store.appID != "application-1" || store.active {
+		t.Fatalf("expected application-owned rule to be disabled, got id=%q app=%q active=%t", store.ruleID, store.appID, store.active)
+	}
+}
+
+func TestUpdateIgnoreRuleTargetsApplicationOwnedRuleAndTrimsFields(t *testing.T) {
+	store := &ignoreRuleMutationStore{}
+	s := NewServer(store, mockQueue{}, slog.Default(), "", false)
+	body := bytes.NewBufferString(`{"name":"  Keep HPA scale  ","match_expression":" spec.replicas ","resource_ref":" apps/v1/Deployment:payments/ledger-api ","reason":" controller owned "}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/applications/application-1/ignore-rules/rule-1", body)
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if store.ruleID != "rule-1" || store.appID != "application-1" {
+		t.Fatalf("expected application-owned update target, got id=%q app=%q", store.ruleID, store.appID)
+	}
+	if store.updated.Name != "Keep HPA scale" || store.updated.MatchExpression != "spec.replicas" ||
+		store.updated.ResourceRef != "apps/v1/Deployment:payments/ledger-api" || store.updated.Reason != "controller owned" {
+		t.Fatalf("unexpected edit parameters: %#v", store.updated)
+	}
+}
+
+func TestDeleteIgnoreRuleTargetsApplicationOwnedRule(t *testing.T) {
+	store := &ignoreRuleMutationStore{}
+	s := NewServer(store, mockQueue{}, slog.Default(), "", false)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/applications/application-1/ignore-rules/rule-1", nil)
+	rec := httptest.NewRecorder()
+
+	s.Router().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !store.deleted || store.ruleID != "rule-1" || store.appID != "application-1" {
+		t.Fatalf("expected application-owned rule deletion, got id=%q app=%q deleted=%t", store.ruleID, store.appID, store.deleted)
 	}
 }

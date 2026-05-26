@@ -68,3 +68,10 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: keep placeholder evidence until audit integration exists, remove evidence records entirely, or persist only signals available from the analyzed Git and Kubernetes inputs.
   Chosen approach: store Git revision and live-collection provenance for each incident; add `managedFields` manager evidence only when the live resource owns the exact compared field; mark synthetic fallback evidence untrusted.
   Consequences: incident evidence is truthful with current inputs and can support future correlation, but attributing who caused drift requires additional audit, deployment, or controller signals.
+
+- Date: 2026-05-26
+  Decision: Application-owned ignore rules may be edited or deleted, while recorded suppressions remain immutable explanations of past evaluation.
+  Context: Operators need to retire or correct narrow application suppressions without gaining an accidental workspace-wide control surface or erasing why previously hidden findings were suppressed.
+  Options considered: activation-only management, mutable application-owned rules with historical audit snapshots, mutable inherited workspace rules in the same surface.
+  Chosen approach: authorize edit and confirmed-delete endpoints only for rules owned by the selected application; leave inherited workspace rows read-only; rely on persisted suppression snapshots and nullable rule references to preserve recorded history.
+  Consequences: future analysis follows the operator's current scoped rules, existing suppression audit records remain interpretable after mutation or deletion, and workspace-wide administration still requires a separately reviewed design.

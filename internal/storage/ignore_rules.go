@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -86,6 +87,46 @@ func (r *Repository) SetIgnoreRuleActiveForApplication(ctx context.Context, id, 
 		return model.IgnoreRule{}, mapNotFound(fmt.Errorf("set application ignore rule active: %w", err))
 	}
 	return rule, nil
+}
+
+func (r *Repository) UpdateIgnoreRuleForApplication(ctx context.Context, id, applicationID string, params UpdateIgnoreRuleParams) (model.IgnoreRule, error) {
+	const query = `
+		UPDATE ignore_rules
+		SET resource_ref = NULLIF($3, ''), name = $4, match_expression = $5, reason = $6
+		WHERE id = $1 AND application_id = $2
+		RETURNING id, workspace_id, application_id::text, COALESCE(resource_ref, ''),
+			name, match_expression, reason, created_by, active, created_at
+	`
+
+	rule, err := scanIgnoreRule(r.pool.QueryRow(
+		ctx,
+		query,
+		id,
+		applicationID,
+		params.ResourceRef,
+		params.Name,
+		params.MatchExpression,
+		params.Reason,
+	))
+	if err != nil {
+		mappedErr := mapConflict(fmt.Errorf("update application ignore rule: %w", err))
+		if errors.Is(mappedErr, ErrConflict) {
+			return model.IgnoreRule{}, mappedErr
+		}
+		return model.IgnoreRule{}, mapNotFound(mappedErr)
+	}
+	return rule, nil
+}
+
+func (r *Repository) DeleteIgnoreRuleForApplication(ctx context.Context, id, applicationID string) error {
+	commandTag, err := r.pool.Exec(ctx, `DELETE FROM ignore_rules WHERE id = $1 AND application_id = $2`, id, applicationID)
+	if err != nil {
+		return fmt.Errorf("delete application ignore rule: %w", err)
+	}
+	if commandTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *Repository) collectIgnoreRules(ctx context.Context, query string, args ...any) ([]model.IgnoreRule, error) {

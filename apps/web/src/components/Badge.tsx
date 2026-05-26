@@ -8,5 +8,5 @@ const toneClass: Record<BadgeTone, string> = {
 };
 
 export function Badge({ label, tone = "neutral" }: { label: string; tone?: BadgeTone }) {
-  return <span className={`inline-flex max-w-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${toneClass[tone]}`}>{label}</span>;
+  return <span className={`inline-flex max-w-full border px-1.5 py-0.5 text-sm font-medium uppercase ${toneClass[tone]}`}>{label}</span>;
 }
