@@ -43,7 +43,8 @@ The current worker obtains desired state by cloning configured Git sources and o
 - Application-managed rules carry an `application_id` and may additionally specify an exact `resource_ref`; legacy rules without an application remain inherited workspace rules.
 - Resource-scoped application rules are considered before application-wide rules, then inherited workspace rules. Creation time and ID provide deterministic ordering inside a scope.
 - A suppression writes a `suppressed_findings` audit record linked to the analysis snapshots and a snapshot of the rule name/reason, then appears in application details.
-- Application details display applicable rules and allow creation or activation changes for application-owned rules; inherited workspace rules are read-only through this surface.
+- Application details display applicable rules and allow creation, edits, activation changes, and confirmed deletion for application-owned rules; inherited workspace rules are read-only through this surface.
+- Edits and deletion govern future analysis only. Existing suppression audit rows store the matching rule name and reason captured when suppression occurred, and rule deletion nulls only their optional rule reference.
 
 ## Key Internal Boundaries
 

@@ -69,7 +69,7 @@ Matching is case-sensitive and trims surrounding whitespace. Wildcards and regul
 
 Existing rows with no `application_id` remain inherited workspace rules for compatibility. They are displayed on application details as read-only because changing one affects every application in that workspace.
 
-A suppressed candidate does not create a drift incident. The worker stores a `suppressed_findings` audit record linked to the analysis snapshots, including the matching rule name and reason captured at analysis time. Application details expose the audit history under `Suppressed` and rule management under `Ignore Rules`. Managed application rules can currently be created, enabled, and disabled; editing, deletion, and workspace-rule administration are not implemented.
+A suppressed candidate does not create a drift incident. The worker stores a `suppressed_findings` audit record linked to the analysis snapshots, including the matching rule name and reason captured at analysis time. Application details expose the audit history under `Suppressed` and application-owned rule management under `Ignore Rules`: operators can create, edit, enable, disable, and delete those rules. Editing or deleting a rule changes future evaluation only; existing suppression audit records retain the captured rule explanation. Inherited workspace-rule administration is not implemented.
 
 ## Operator Interface
 
@@ -171,7 +171,9 @@ make web
 - `GET /api/v1/applications/:id`
 - `POST /api/v1/applications/:id/analyze`
 - `POST /api/v1/applications/:id/ignore-rules`
+- `PUT /api/v1/applications/:id/ignore-rules/:ruleID`
 - `PATCH /api/v1/applications/:id/ignore-rules/:ruleID`
+- `DELETE /api/v1/applications/:id/ignore-rules/:ruleID`
 - `GET /api/v1/incidents/:id`
 - `GET /api/v1/incidents/:id/timeline`
 - `POST /api/v1/github/webhook`
@@ -181,7 +183,7 @@ Application detail responses include `incidents`, `suppressions`, and applicable
 ## Next Suggested Implementation Steps
 
 1. Correlate persisted provenance with audit, deployment, or controller signals without treating field ownership as causality.
-2. Extend ignore-rule administration with editing, deletion, and deliberate workspace-wide rule management.
+2. Add deliberate workspace-wide rule management with an appropriate authorization and blast-radius review boundary.
 3. Expand normalization, diff coverage, and incident grouping with focused tests.
 4. Replace header-trusted identity with an authenticated workspace access flow.
 5. Add GitOps rendering/integration support and hardened Kubernetes collection.

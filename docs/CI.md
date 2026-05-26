@@ -24,7 +24,7 @@ Require pull requests, at least one approving review, and review from code owner
 - Workflow policy: validates workflow files with fixed-version `actionlint` and parses CI shell helpers.
 - Go quality and security: verifies modules, formatting, `go vet`, Staticcheck, reachable-vulnerability analysis with `govulncheck`, and race-enabled tests with a retained coverage artifact.
 - Web quality and dependency audit: installs strictly from the lockfile, fails on npm advisories at moderate severity or above, runs ESLint, type-checks, and builds production assets.
-- Database migration and API smoke: boots PostgreSQL and Redis, applies migrations twice to verify replay safety, seeds data, and exercises scoped ignore-rule creation/list/update through the API.
+- Database migration and API smoke: boots PostgreSQL and Redis, applies migrations twice to verify replay safety, seeds data, and exercises scoped ignore-rule creation, list, edit, activation, and deletion through the API.
 - Container build and vulnerability scan: builds the deployable API, worker, and web images from digest-pinned bases with reusable Go build caches, verifies web runtime security headers, then fails on fixable high or critical vulnerabilities found by checksum-verified Grype.
 
 Only fixable high or critical container findings block merges. Non-fixable base-image findings remain visible in scanner output and must be evaluated during dependency/image updates rather than waived silently.

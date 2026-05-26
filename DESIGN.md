@@ -96,13 +96,15 @@ Hierarchy is produced by one-pixel borders and slight hover fills, not floating 
 
 Primary actions are compact orange buttons with dark text and an icon where the command benefits from recognition, such as `Analyze`. Orange is not used to decorate data; it denotes selection or command intent. Secondary controls use the neutral surface and border. Keyboard focus uses a two-pixel orange outline outside the component.
 
-Panels are reserved for bounded tools or data groups: inventory totals, application tables, incident differences, provenance, timelines, and rule administration. Tables become stacked rows on narrow screens when horizontal comparison is unnecessary; comparison and rule tables retain controlled horizontal scrolling when preserving columns is materially useful.
+Panels are reserved for bounded tools or data groups: inventory totals, application tables, incident differences, provenance, timelines, and rule administration. Tables become stacked rows on narrow screens when horizontal comparison is unnecessary; evidence comparison tables retain controlled horizontal scrolling when preserving columns is materially useful. Rule administration stacks on narrow screens so edit and confirmation controls remain directly operable.
 
 Provenance records distinguish `Captured`, `Ownership signal`, and `Untrusted` states in text and color. `not-attributed` is displayed as `No actor observed`. Evidence fact labels stack above technical values so long actor identifiers retain usable width on narrow screens. Managed-field ownership always carries the non-causality statement beside the record.
 
 The sidebar exposes only real overview data: incidents, queued or processing analysis jobs, and tracked applications. Reference-only concepts such as AI insights, computed health, remediation actions, commit history and cluster status are not rendered until StateSight owns corresponding API contracts.
 
 Application subviews use a semantic tablist with arrow, Home and End keyboard operation. On narrow screens, all three modes occupy stable columns with their count below the full label, avoiding clipping at compact phone widths. Loading states expose busy status, errors announce alerts, and successful queued actions announce status without shifting page structure.
+
+Application-owned ignore rules expose explicit edit, activation and delete commands. Delete is destructive command styling only at confirmation time, and the confirmation states that suppression audit history remains retained. Inherited workspace rules remain visible as context and display no mutation controls.
 
 Controls preserve a minimum touch height on coarse pointers. Color feedback transitions use a restrained 150 ms ease-out curve; collapsing the sidebar changes immediately because layout dimensions are not animated. All motion is reduced when the user requests reduced motion.
 
