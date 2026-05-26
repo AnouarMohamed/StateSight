@@ -10,7 +10,7 @@ colors:
   border-subtle: "#1a1918"
   text: "#e7e5e4"
   text-muted: "#a8a29e"
-  text-dim: "#78716c"
+  text-dim: "#8f8883"
   link: "#f97316"
   link-surface: "#28150d"
   action: "#ea580c"

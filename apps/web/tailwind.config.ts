@@ -14,7 +14,7 @@ const config: Config = {
         "ops-border-muted": "#1a1918",
         "ops-text": "#e7e5e4",
         "ops-muted": "#a8a29e",
-        "ops-dim": "#78716c",
+        "ops-dim": "#8f8883",
         "ops-accent": "#f97316",
         "ops-accent-soft": "#28150d",
         "ops-action": "#ea580c",
