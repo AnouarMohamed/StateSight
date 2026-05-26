@@ -12,6 +12,7 @@ type Resource struct {
 	Namespace   string         `json:"namespace"`
 	Name        string         `json:"name"`
 	Spec        map[string]any `json:"spec"`
+	Labels      map[string]any `json:"labels"`
 	Annotations map[string]any `json:"annotations"`
 	Raw         map[string]any `json:"raw"`
 }
@@ -47,7 +48,8 @@ func extractResource(raw map[string]any) Resource {
 	namespace := readString(metadata, "namespace")
 	name := readString(metadata, "name")
 	spec := readMap(raw, "spec")
-	annotations := readMap(readMap(raw, "metadata"), "annotations")
+	labels := readMap(metadata, "labels")
+	annotations := readMap(metadata, "annotations")
 
 	key := resourceKey(kind, namespace, name)
 	return Resource{
@@ -57,6 +59,7 @@ func extractResource(raw map[string]any) Resource {
 		Namespace:   namespace,
 		Name:        name,
 		Spec:        spec,
+		Labels:      labels,
 		Annotations: annotations,
 		Raw:         raw,
 	}

@@ -3,6 +3,7 @@ package diff
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -73,8 +74,22 @@ func (e SemanticEngine) Compare(_ context.Context, _ model.Application, desired 
 		})
 	}
 
-	sort.SliceStable(findings, func(i, j int) bool {
-		return findings[i].ResourceRef < findings[j].ResourceRef
+	sort.Slice(findings, func(i, j int) bool {
+		left := findings[i]
+		right := findings[j]
+		if left.ResourceRef != right.ResourceRef {
+			return left.ResourceRef < right.ResourceRef
+		}
+		if left.FieldPath != right.FieldPath {
+			return left.FieldPath < right.FieldPath
+		}
+		if left.DifferenceType != right.DifferenceType {
+			return left.DifferenceType < right.DifferenceType
+		}
+		if left.DesiredValue != right.DesiredValue {
+			return left.DesiredValue < right.DesiredValue
+		}
+		return left.LiveValue < right.LiveValue
 	})
 	return findings, nil
 }
@@ -117,28 +132,83 @@ func compareResource(desired, live normalize.Resource) []Finding {
 		})
 	}
 
-	keys := annotationKeys(desired.Annotations, live.Annotations)
-	for _, key := range keys {
-		dVal := fmt.Sprintf("%v", desired.Annotations[key])
-		lVal := fmt.Sprintf("%v", live.Annotations[key])
-		if dVal == lVal {
-			continue
-		}
-		out = append(out, Finding{
-			Title:          "Annotation drift",
-			Category:       "metadata",
-			Severity:       "low",
-			Confidence:     0.73,
-			ResourceKey:    desired.Key,
-			ResourceRef:    ref,
-			FieldPath:      "metadata.annotations." + key,
-			DesiredValue:   dVal,
-			LiveValue:      lVal,
-			DifferenceType: "modified",
-		})
+	out = append(out, compareFlatMap(desired, ref, desired.Annotations, live.Annotations, mapComparison{
+		title:       "Annotation drift",
+		category:    "metadata",
+		severity:    "low",
+		confidence:  0.73,
+		fieldPrefix: "metadata.annotations.",
+	})...)
+	out = append(out, compareFlatMap(desired, ref, desired.Labels, live.Labels, mapComparison{
+		title:       "Label drift",
+		category:    "metadata",
+		severity:    "low",
+		confidence:  0.78,
+		fieldPrefix: "metadata.labels.",
+	})...)
+
+	if strings.TrimSpace(desired.Kind) == "Service" {
+		out = append(out, compareFlatMap(desired, ref, readMap(desired.Spec, "selector"), readMap(live.Spec, "selector"), mapComparison{
+			title:       "Service selector drift",
+			category:    "routing",
+			severity:    "high",
+			confidence:  0.92,
+			fieldPrefix: "spec.selector.",
+		})...)
 	}
 
 	return out
+}
+
+type mapComparison struct {
+	title       string
+	category    string
+	severity    string
+	confidence  float64
+	fieldPrefix string
+}
+
+func compareFlatMap(resource normalize.Resource, ref string, desired, live map[string]any, comparison mapComparison) []Finding {
+	out := make([]Finding, 0)
+	for _, key := range mapKeys(desired, live) {
+		desiredValue, desiredExists := desired[key]
+		liveValue, liveExists := live[key]
+		if desiredExists && liveExists && reflect.DeepEqual(desiredValue, liveValue) {
+			continue
+		}
+
+		out = append(out, Finding{
+			Title:          comparison.title,
+			Category:       comparison.category,
+			Severity:       comparison.severity,
+			Confidence:     comparison.confidence,
+			ResourceKey:    resource.Key,
+			ResourceRef:    ref,
+			FieldPath:      comparison.fieldPrefix + key,
+			DesiredValue:   displayMapValue(desiredValue, desiredExists),
+			LiveValue:      displayMapValue(liveValue, liveExists),
+			DifferenceType: mapDifferenceType(desiredExists, liveExists),
+		})
+	}
+	return out
+}
+
+func displayMapValue(value any, exists bool) string {
+	if !exists {
+		return "<absent>"
+	}
+	return fmt.Sprintf("%v", value)
+}
+
+func mapDifferenceType(desiredExists, liveExists bool) string {
+	switch {
+	case !desiredExists:
+		return "added"
+	case !liveExists:
+		return "removed"
+	default:
+		return "modified"
+	}
 }
 
 func readNumber(input map[string]any, key string) (int64, bool) {
@@ -187,7 +257,22 @@ func firstContainerImage(spec map[string]any) (string, bool) {
 	return strings.TrimSpace(image), true
 }
 
-func annotationKeys(desired, live map[string]any) []string {
+func readMap(input map[string]any, key string) map[string]any {
+	if input == nil {
+		return map[string]any{}
+	}
+	value, ok := input[key]
+	if !ok {
+		return map[string]any{}
+	}
+	typed, ok := value.(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	return typed
+}
+
+func mapKeys(desired, live map[string]any) []string {
 	set := map[string]struct{}{}
 	for key := range desired {
 		set[key] = struct{}{}

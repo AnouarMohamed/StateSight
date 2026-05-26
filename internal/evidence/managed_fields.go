@@ -67,6 +67,18 @@ func managedFieldsPath(resource normalize.Resource, fieldPath string) ([]string,
 			return nil, false
 		}
 		return []string{"f:metadata", "f:annotations", "f:" + annotation}, true
+	case strings.HasPrefix(fieldPath, "metadata.labels."):
+		label := strings.TrimPrefix(fieldPath, "metadata.labels.")
+		if label == "" {
+			return nil, false
+		}
+		return []string{"f:metadata", "f:labels", "f:" + label}, true
+	case strings.HasPrefix(fieldPath, "spec.selector."):
+		selector := strings.TrimPrefix(fieldPath, "spec.selector.")
+		if selector == "" {
+			return nil, false
+		}
+		return []string{"f:spec", "f:selector", "f:" + selector}, true
 	case strings.HasPrefix(fieldPath, "spec.") && !strings.ContainsAny(fieldPath, "[]"):
 		segments := strings.Split(fieldPath, ".")
 		path := make([]string, 0, len(segments))
