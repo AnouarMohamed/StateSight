@@ -104,6 +104,144 @@ func TestProvenanceAttributorMatchesContainerImageOwnershipByContainerName(t *te
 	}
 }
 
+func TestProvenanceAttributorMatchesMetadataLabelOwnership(t *testing.T) {
+	live := deploymentResource(2)
+	live["metadata"].(map[string]any)["labels"] = map[string]any{"app.kubernetes.io/name": "ledger-api-live"}
+	live["metadata"].(map[string]any)["managedFields"] = []any{map[string]any{
+		"manager":    "argocd-controller",
+		"operation":  "Apply",
+		"apiVersion": "apps/v1",
+		"time":       "2026-05-25T13:00:00Z",
+		"fieldsV1": map[string]any{
+			"f:metadata": map[string]any{
+				"f:labels": map[string]any{
+					"f:app.kubernetes.io/name": map[string]any{},
+				},
+			},
+		},
+	}}
+	candidate := replicaCandidate()
+	candidate.FieldPath = "metadata.labels.app.kubernetes.io/name"
+
+	attributions, err := (ProvenanceAttributor{}).BuildAttributions(
+		context.Background(),
+		analysisWithLiveResource(live),
+		candidate,
+	)
+	if err != nil {
+		t.Fatalf("build attributions: %v", err)
+	}
+	if len(attributions) != 3 || attributions[2].Actor != "argocd-controller" {
+		t.Fatalf("expected exact metadata-label manager evidence, got %#v", attributions)
+	}
+}
+
+func TestProvenanceAttributorAttributesOnlyExactNamedContainerResourceOwnership(t *testing.T) {
+	live := deploymentResource(2)
+	live["spec"].(map[string]any)["template"] = map[string]any{
+		"spec": map[string]any{
+			"containers": []any{map[string]any{
+				"name": "ledger-api",
+				"env":  []any{map[string]any{"name": "MODE", "value": "live"}},
+				"resources": map[string]any{
+					"requests": map[string]any{"nvidia.com/gpu": "1"},
+				},
+			}},
+		},
+	}
+	live["metadata"].(map[string]any)["managedFields"] = []any{map[string]any{
+		"manager":    "rollout-controller",
+		"operation":  "Apply",
+		"apiVersion": "apps/v1",
+		"time":       "2026-05-25T13:00:00Z",
+		"fieldsV1": map[string]any{
+			"f:spec": map[string]any{
+				"f:template": map[string]any{
+					"f:spec": map[string]any{
+						"f:containers": map[string]any{
+							`k:{"name":"ledger-api"}`: map[string]any{
+								"f:env": map[string]any{
+									`k:{"name":"MODE"}`: map[string]any{},
+								},
+								"f:resources": map[string]any{
+									"f:requests": map[string]any{
+										"f:nvidia.com/gpu": map[string]any{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}}
+
+	resourceCandidate := replicaCandidate()
+	resourceCandidate.FieldPath = "spec.template.spec.containers[name=ledger-api].resources.requests.nvidia.com/gpu"
+	resourceAttributions, err := (ProvenanceAttributor{}).BuildAttributions(
+		context.Background(),
+		analysisWithLiveResource(live),
+		resourceCandidate,
+	)
+	if err != nil {
+		t.Fatalf("build resource attributions: %v", err)
+	}
+	if len(resourceAttributions) != 3 || resourceAttributions[2].Actor != "rollout-controller" {
+		t.Fatalf("expected exact named-container resource evidence, got %#v", resourceAttributions)
+	}
+
+	envCandidate := replicaCandidate()
+	envCandidate.FieldPath = "spec.template.spec.containers[name=ledger-api].env[name=MODE]"
+	envAttributions, err := (ProvenanceAttributor{}).BuildAttributions(
+		context.Background(),
+		analysisWithLiveResource(live),
+		envCandidate,
+	)
+	if err != nil {
+		t.Fatalf("build environment attributions: %v", err)
+	}
+	if len(envAttributions) != 2 {
+		t.Fatalf("expected aggregate environment drift not to claim partial manager ownership, got %#v", envAttributions)
+	}
+}
+
+func TestProvenanceAttributorMatchesQualifiedServiceSelectorOwnership(t *testing.T) {
+	desired := serviceSelectorResource("ledger-api")
+	live := serviceSelectorResource("other-service")
+	live["metadata"].(map[string]any)["managedFields"] = []any{map[string]any{
+		"manager":    "service-operator",
+		"operation":  "Update",
+		"apiVersion": "v1",
+		"time":       "2026-05-25T13:00:00Z",
+		"fieldsV1": map[string]any{
+			"f:spec": map[string]any{
+				"f:selector": map[string]any{
+					"f:app.kubernetes.io/name": map[string]any{},
+				},
+			},
+		},
+	}}
+	candidate := incidents.Candidate{
+		ResourceKey:  "Service|payments|ledger-api",
+		ResourceRef:  "v1/Service:payments/ledger-api",
+		FieldPath:    "spec.selector.app.kubernetes.io/name",
+		DesiredValue: "ledger-api",
+		LiveValue:    "other-service",
+	}
+
+	attributions, err := (ProvenanceAttributor{}).BuildAttributions(
+		context.Background(),
+		analysisWithResources(desired, live),
+		candidate,
+	)
+	if err != nil {
+		t.Fatalf("build attributions: %v", err)
+	}
+	if len(attributions) != 3 || attributions[2].Actor != "service-operator" {
+		t.Fatalf("expected exact service-selector manager evidence, got %#v", attributions)
+	}
+}
+
 func TestProvenanceAttributorDoesNotUseManagedFieldsForAnotherPath(t *testing.T) {
 	live := deploymentResource(2)
 	live["metadata"].(map[string]any)["managedFields"] = []any{
@@ -151,6 +289,10 @@ func TestProvenanceAttributorMarksSyntheticStateAsUntrusted(t *testing.T) {
 }
 
 func analysisWithLiveResource(live map[string]any) AnalysisContext {
+	return analysisWithResources(deploymentResource(3), live)
+}
+
+func analysisWithResources(desired, live map[string]any) AnalysisContext {
 	normalizer := normalize.PassThroughNormalizer{}
 	return AnalysisContext{
 		Application: model.Application{Name: "ledger-api", Namespace: "payments"},
@@ -161,7 +303,7 @@ func analysisWithLiveResource(live map[string]any) AnalysisContext {
 		},
 		Cluster:         model.Cluster{ID: "cluster-1", Name: "prod-eu"},
 		DesiredRevision: "abcdef1234567890",
-		Desired:         normalizer.Normalize([]map[string]any{deploymentResource(3)}),
+		Desired:         normalizer.Normalize([]map[string]any{desired}),
 		Live:            normalizer.Normalize([]map[string]any{live}),
 		LiveSummary:     map[string]any{"source": "kubectl"},
 	}
@@ -187,6 +329,20 @@ func deploymentResource(replicas int) map[string]any {
 		},
 		"spec": map[string]any{
 			"replicas": replicas,
+		},
+	}
+}
+
+func serviceSelectorResource(selector string) map[string]any {
+	return map[string]any{
+		"apiVersion": "v1",
+		"kind":       "Service",
+		"metadata": map[string]any{
+			"name":      "ledger-api",
+			"namespace": "payments",
+		},
+		"spec": map[string]any{
+			"selector": map[string]any{"app.kubernetes.io/name": selector},
 		},
 	}
 }

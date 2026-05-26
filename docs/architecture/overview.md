@@ -15,8 +15,16 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 - Every persisted incident records the Git source, source path, and analyzed revision that supplied its desired-state comparison.
 - Every persisted incident records the live collection source. `kubectl` observations are trusted collection evidence; explicit synthetic fallback records are marked untrusted.
-- The `kubectl` collector requests managed-field output explicitly. For drift fields currently supported by the semantic diff engine, the worker reads live-object `metadata.managedFields` and persists manager evidence only when `fieldsV1` contains the exact compared path. Container-image ownership is resolved through the live container name rather than an assumed list index.
+- The `kubectl` collector requests managed-field output explicitly. For drift fields currently supported by the semantic diff engine, the worker reads live-object `metadata.managedFields` and persists manager evidence only when `fieldsV1` contains the exact compared leaf. Qualified annotation, label, Service selector, and resource quantity keys are treated as single Kubernetes map keys; container-image ownership is resolved through the live container name rather than an assumed list index.
 - A reported field manager establishes ownership metadata only. It is not treated as proof of who caused the observed difference, and the worker does not invent actor identities when no such signal exists.
+
+## Semantic Diff Boundary
+
+- The worker emits semantic findings for resource presence, replica count, first-container image, annotation, metadata label, Service selector, named pod-template container presence, named environment entry, and named container resource request/limit differences.
+- Annotation, label, and Service selector values are compared by exact key; additions and removals are represented explicitly, and findings are ordered deterministically.
+- Pod-template containers and environment entries use name-qualified canonical paths. Environment values include literal and `valueFrom` configuration; resource quantities use Kubernetes semantic equality so equivalent representations do not drift.
+- Named-container presence and environment-entry findings are aggregate values and therefore do not emit `managedFields` ownership evidence. Request/limit quantity fields are exact leaves and can emit that evidence when present in the live object.
+- Volumes and probes are not yet semantically compared, and first-container image paths remain positional for compatibility with existing exact ignore rules.
 
 ## Services
 
