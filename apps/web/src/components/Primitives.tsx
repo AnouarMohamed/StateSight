@@ -36,7 +36,9 @@ export function Panel({ children, className = "", ...props }: HTMLAttributes<HTM
 const buttonVariants = {
   primary: "border-ops-action-border bg-ops-action text-ops-bg hover:bg-ops-action-hover active:bg-ops-action-hover",
   secondary: "border-ops-border bg-ops-panel text-ops-text hover:bg-ops-shell-hover active:bg-ops-panel-alt",
-  quiet: "border-transparent bg-transparent text-ops-accent hover:bg-ops-accent-soft active:bg-ops-accent-soft"
+  quiet: "border-transparent bg-transparent text-ops-accent hover:bg-ops-accent-soft active:bg-ops-accent-soft",
+  danger: "border-ops-bad-border bg-ops-bad-soft text-ops-bad hover:bg-ops-bad-border hover:text-ops-text active:bg-ops-bad-border",
+  dangerQuiet: "border-transparent bg-transparent text-ops-bad hover:bg-ops-bad-soft active:bg-ops-bad-soft"
 } as const;
 
 export function ActionButton({

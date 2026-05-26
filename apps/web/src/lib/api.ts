@@ -101,7 +101,7 @@ export type IgnoreRule = {
   created_at: string;
 };
 
-export type CreateIgnoreRuleInput = {
+export type IgnoreRuleInput = {
   name: string;
   match_expression: string;
   resource_ref: string;
@@ -175,9 +175,16 @@ export function analyzeApplication(id: string) {
   });
 }
 
-export function createIgnoreRule(applicationId: string, input: CreateIgnoreRuleInput) {
+export function createIgnoreRule(applicationId: string, input: IgnoreRuleInput) {
   return request<IgnoreRule>(`/api/v1/applications/${applicationId}/ignore-rules`, {
     method: "POST",
+    body: JSON.stringify(input)
+  });
+}
+
+export function updateIgnoreRule(applicationId: string, ruleId: string, input: IgnoreRuleInput) {
+  return request<IgnoreRule>(`/api/v1/applications/${applicationId}/ignore-rules/${ruleId}`, {
+    method: "PUT",
     body: JSON.stringify(input)
   });
 }
@@ -186,6 +193,12 @@ export function setIgnoreRuleActive(applicationId: string, ruleId: string, activ
   return request<IgnoreRule>(`/api/v1/applications/${applicationId}/ignore-rules/${ruleId}`, {
     method: "PATCH",
     body: JSON.stringify({ active })
+  });
+}
+
+export function deleteIgnoreRule(applicationId: string, ruleId: string) {
+  return request<{ id: string; status: string }>(`/api/v1/applications/${applicationId}/ignore-rules/${ruleId}`, {
+    method: "DELETE"
   });
 }
 
