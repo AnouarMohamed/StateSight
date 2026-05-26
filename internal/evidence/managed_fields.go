@@ -56,11 +56,13 @@ func managedFieldsPath(resource normalize.Resource, fieldPath string) ([]string,
 		if !ok {
 			return nil, false
 		}
-		key, err := json.Marshal(map[string]string{"name": name})
-		if err != nil {
+		containerSegment, ok := managedListItemSegment(name)
+		if !ok {
 			return nil, false
 		}
-		return []string{"f:spec", "f:template", "f:spec", "f:containers", "k:" + string(key), "f:image"}, true
+		return []string{"f:spec", "f:template", "f:spec", "f:containers", containerSegment, "f:image"}, true
+	case strings.HasPrefix(fieldPath, "spec.template.spec.containers[name="):
+		return namedContainerManagedFieldsPath(fieldPath)
 	case strings.HasPrefix(fieldPath, "metadata.annotations."):
 		annotation := strings.TrimPrefix(fieldPath, "metadata.annotations.")
 		if annotation == "" {
@@ -92,6 +94,58 @@ func managedFieldsPath(resource normalize.Resource, fieldPath string) ([]string,
 	default:
 		return nil, false
 	}
+}
+
+func namedContainerManagedFieldsPath(fieldPath string) ([]string, bool) {
+	const containerPrefix = "spec.template.spec.containers[name="
+
+	containerName, suffix, ok := consumeNamedPath(fieldPath, containerPrefix)
+	// Presence and aggregate environment findings do not identify one owned leaf.
+	if !ok || suffix == "" || strings.HasPrefix(suffix, ".env[name=") {
+		return nil, false
+	}
+	containerSegment, ok := managedListItemSegment(containerName)
+	if !ok {
+		return nil, false
+	}
+	path := []string{"f:spec", "f:template", "f:spec", "f:containers", containerSegment}
+
+	switch {
+	case strings.HasPrefix(suffix, ".resources.requests."):
+		resource := strings.TrimPrefix(suffix, ".resources.requests.")
+		if resource == "" {
+			return nil, false
+		}
+		return append(path, "f:resources", "f:requests", "f:"+resource), true
+	case strings.HasPrefix(suffix, ".resources.limits."):
+		resource := strings.TrimPrefix(suffix, ".resources.limits.")
+		if resource == "" {
+			return nil, false
+		}
+		return append(path, "f:resources", "f:limits", "f:"+resource), true
+	default:
+		return nil, false
+	}
+}
+
+func consumeNamedPath(path, prefix string) (string, string, bool) {
+	if !strings.HasPrefix(path, prefix) {
+		return "", "", false
+	}
+	remainder := strings.TrimPrefix(path, prefix)
+	close := strings.IndexByte(remainder, ']')
+	if close <= 0 {
+		return "", "", false
+	}
+	return remainder[:close], remainder[close+1:], true
+}
+
+func managedListItemSegment(name string) (string, bool) {
+	key, err := json.Marshal(map[string]string{"name": name})
+	if err != nil {
+		return "", false
+	}
+	return "k:" + string(key), true
 }
 
 func firstContainerName(resource normalize.Resource) (string, bool) {

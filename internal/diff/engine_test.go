@@ -103,6 +103,118 @@ func TestSemanticEngineOrdersFindingsDeterministically(t *testing.T) {
 	}
 }
 
+func TestSemanticEngineDetectsNamedContainerConfigurationDrift(t *testing.T) {
+	desired := normalizedSnapshot(workloadResource([]any{
+		map[string]any{
+			"name":  "api",
+			"image": "registry.example.com/api:v1",
+			"env": []any{
+				map[string]any{"name": "MODE", "value": "production"},
+				map[string]any{"name": "TOKEN", "valueFrom": map[string]any{"secretKeyRef": map[string]any{"name": "api-token", "key": "token"}}},
+			},
+			"resources": map[string]any{
+				"requests": map[string]any{"cpu": "250m"},
+				"limits":   map[string]any{"memory": "256Mi"},
+			},
+		},
+		map[string]any{"name": "sidecar", "image": "registry.example.com/sidecar:v1"},
+	}))
+	live := normalizedSnapshot(workloadResource([]any{
+		map[string]any{
+			"name":  "api",
+			"image": "registry.example.com/api:v1",
+			"env": []any{
+				map[string]any{"name": "MODE", "value": "staging"},
+				map[string]any{"name": "TOKEN", "valueFrom": map[string]any{"configMapKeyRef": map[string]any{"name": "api-config", "key": "token"}}},
+			},
+			"resources": map[string]any{
+				"requests": map[string]any{"cpu": "500m"},
+			},
+		},
+		map[string]any{"name": "debug", "image": "registry.example.com/debug:v1"},
+	}))
+
+	findings, err := (SemanticEngine{}).Compare(context.Background(), model.Application{}, desired, live)
+	if err != nil {
+		t.Fatalf("compare snapshots: %v", err)
+	}
+
+	expected := []Finding{
+		{
+			FieldPath:      "spec.template.spec.containers[name=api].env[name=MODE]",
+			DesiredValue:   `{"value":"production"}`,
+			LiveValue:      `{"value":"staging"}`,
+			DifferenceType: "modified",
+		},
+		{
+			FieldPath:      "spec.template.spec.containers[name=api].env[name=TOKEN]",
+			DesiredValue:   `{"valueFrom":{"secretKeyRef":{"key":"token","name":"api-token"}}}`,
+			LiveValue:      `{"valueFrom":{"configMapKeyRef":{"key":"token","name":"api-config"}}}`,
+			DifferenceType: "modified",
+		},
+		{
+			FieldPath:      "spec.template.spec.containers[name=api].resources.limits.memory",
+			DesiredValue:   "256Mi",
+			LiveValue:      "<absent>",
+			DifferenceType: "removed",
+		},
+		{
+			FieldPath:      "spec.template.spec.containers[name=api].resources.requests.cpu",
+			DesiredValue:   "250m",
+			LiveValue:      "500m",
+			DifferenceType: "modified",
+		},
+		{
+			FieldPath:      "spec.template.spec.containers[name=debug]",
+			DesiredValue:   "<absent>",
+			LiveValue:      "present",
+			DifferenceType: "added",
+		},
+		{
+			FieldPath:      "spec.template.spec.containers[name=sidecar]",
+			DesiredValue:   "present",
+			LiveValue:      "<absent>",
+			DifferenceType: "removed",
+		},
+	}
+	if len(findings) != len(expected) {
+		t.Fatalf("expected %d findings, got %#v", len(expected), findings)
+	}
+	for index, want := range expected {
+		got := findings[index]
+		if got.FieldPath != want.FieldPath || got.DesiredValue != want.DesiredValue || got.LiveValue != want.LiveValue || got.DifferenceType != want.DifferenceType {
+			t.Fatalf("finding %d = %#v, want field/value/type %#v", index, got, want)
+		}
+	}
+}
+
+func TestSemanticEngineTreatsEquivalentResourceQuantitiesAsEqual(t *testing.T) {
+	desired := normalizedSnapshot(workloadResource([]any{map[string]any{
+		"name":  "api",
+		"image": "registry.example.com/api:v1",
+		"resources": map[string]any{
+			"requests": map[string]any{"cpu": "1"},
+			"limits":   map[string]any{"memory": "1Gi"},
+		},
+	}}))
+	live := normalizedSnapshot(workloadResource([]any{map[string]any{
+		"name":  "api",
+		"image": "registry.example.com/api:v1",
+		"resources": map[string]any{
+			"requests": map[string]any{"cpu": "1000m"},
+			"limits":   map[string]any{"memory": "1024Mi"},
+		},
+	}}))
+
+	findings, err := (SemanticEngine{}).Compare(context.Background(), model.Application{}, desired, live)
+	if err != nil {
+		t.Fatalf("compare snapshots: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("expected equivalent Kubernetes quantities not to drift, got %#v", findings)
+	}
+}
+
 func normalizedSnapshot(resources ...map[string]any) normalize.Snapshot {
 	return (normalize.PassThroughNormalizer{}).Normalize(resources)
 }
@@ -119,6 +231,22 @@ func serviceResource(labels, annotations, selector map[string]any) map[string]an
 		},
 		"spec": map[string]any{
 			"selector": selector,
+		},
+	}
+}
+
+func workloadResource(containers []any) map[string]any {
+	return map[string]any{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]any{
+			"name":      "ledger-api",
+			"namespace": "payments",
+		},
+		"spec": map[string]any{
+			"template": map[string]any{
+				"spec": map[string]any{"containers": containers},
+			},
 		},
 	}
 }

@@ -2,6 +2,7 @@ package diff
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/AnouarMohamed/StateSight/internal/normalize"
 	"github.com/AnouarMohamed/StateSight/pkg/model"
+	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Finding is a field-level drift candidate before incident grouping.
@@ -32,6 +34,8 @@ type Engine interface {
 
 // SemanticEngine compares normalized desired and live snapshots.
 type SemanticEngine struct{}
+
+const podTemplateContainersPath = "spec.template.spec.containers"
 
 func (e SemanticEngine) Compare(_ context.Context, _ model.Application, desired normalize.Snapshot, live normalize.Snapshot) ([]Finding, error) {
 	findings := make([]Finding, 0)
@@ -132,6 +136,8 @@ func compareResource(desired, live normalize.Resource) []Finding {
 		})
 	}
 
+	out = append(out, comparePodTemplateContainers(desired, live, ref)...)
+
 	out = append(out, compareFlatMap(desired, ref, desired.Annotations, live.Annotations, mapComparison{
 		title:       "Annotation drift",
 		category:    "metadata",
@@ -166,14 +172,25 @@ type mapComparison struct {
 	severity    string
 	confidence  float64
 	fieldPrefix string
+	fieldSuffix string
+	display     func(any, bool) string
+	equivalent  func(any, any) bool
 }
 
 func compareFlatMap(resource normalize.Resource, ref string, desired, live map[string]any, comparison mapComparison) []Finding {
 	out := make([]Finding, 0)
+	display := comparison.display
+	if display == nil {
+		display = displayMapValue
+	}
 	for _, key := range mapKeys(desired, live) {
 		desiredValue, desiredExists := desired[key]
 		liveValue, liveExists := live[key]
-		if desiredExists && liveExists && reflect.DeepEqual(desiredValue, liveValue) {
+		equivalent := reflect.DeepEqual(desiredValue, liveValue)
+		if comparison.equivalent != nil {
+			equivalent = comparison.equivalent(desiredValue, liveValue)
+		}
+		if desiredExists && liveExists && equivalent {
 			continue
 		}
 
@@ -184,9 +201,9 @@ func compareFlatMap(resource normalize.Resource, ref string, desired, live map[s
 			Confidence:     comparison.confidence,
 			ResourceKey:    resource.Key,
 			ResourceRef:    ref,
-			FieldPath:      comparison.fieldPrefix + key,
-			DesiredValue:   displayMapValue(desiredValue, desiredExists),
-			LiveValue:      displayMapValue(liveValue, liveExists),
+			FieldPath:      comparison.fieldPrefix + key + comparison.fieldSuffix,
+			DesiredValue:   display(desiredValue, desiredExists),
+			LiveValue:      display(liveValue, liveExists),
 			DifferenceType: mapDifferenceType(desiredExists, liveExists),
 		})
 	}
@@ -200,6 +217,17 @@ func displayMapValue(value any, exists bool) string {
 	return fmt.Sprintf("%v", value)
 }
 
+func displayJSONValue(value any, exists bool) string {
+	if !exists {
+		return "<absent>"
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Sprintf("%v", value)
+	}
+	return string(encoded)
+}
+
 func mapDifferenceType(desiredExists, liveExists bool) string {
 	switch {
 	case !desiredExists:
@@ -208,6 +236,178 @@ func mapDifferenceType(desiredExists, liveExists bool) string {
 		return "removed"
 	default:
 		return "modified"
+	}
+}
+
+func comparePodTemplateContainers(desired, live normalize.Resource, ref string) []Finding {
+	desiredContainers := namedPodTemplateContainers(desired.Spec)
+	liveContainers := namedPodTemplateContainers(live.Spec)
+	out := make([]Finding, 0)
+
+	for _, name := range namedContainerKeys(desiredContainers, liveContainers) {
+		desiredContainer, desiredExists := desiredContainers[name]
+		liveContainer, liveExists := liveContainers[name]
+		containerPath := podTemplateContainersPath + "[name=" + name + "]"
+
+		switch {
+		case !desiredExists:
+			out = append(out, Finding{
+				Title:          "Unexpected live container",
+				Category:       "configuration",
+				Severity:       "medium",
+				Confidence:     0.9,
+				ResourceKey:    desired.Key,
+				ResourceRef:    ref,
+				FieldPath:      containerPath,
+				DesiredValue:   "<absent>",
+				LiveValue:      "present",
+				DifferenceType: "added",
+			})
+			continue
+		case !liveExists:
+			out = append(out, Finding{
+				Title:          "Container missing from live workload",
+				Category:       "configuration",
+				Severity:       "high",
+				Confidence:     0.94,
+				ResourceKey:    desired.Key,
+				ResourceRef:    ref,
+				FieldPath:      containerPath,
+				DesiredValue:   "present",
+				LiveValue:      "<absent>",
+				DifferenceType: "removed",
+			})
+			continue
+		}
+
+		out = append(out, compareFlatMap(desired, ref, environmentVariables(desiredContainer), environmentVariables(liveContainer), mapComparison{
+			title:       "Container environment drift",
+			category:    "configuration",
+			severity:    "medium",
+			confidence:  0.9,
+			fieldPrefix: containerPath + ".env[name=",
+			fieldSuffix: "]",
+			display:     displayJSONValue,
+		})...)
+		out = append(out, compareFlatMap(desired, ref, containerResources(desiredContainer, "requests"), containerResources(liveContainer, "requests"), mapComparison{
+			title:       "Container resource request drift",
+			category:    "capacity",
+			severity:    "medium",
+			confidence:  0.91,
+			fieldPrefix: containerPath + ".resources.requests.",
+			equivalent:  equivalentQuantity,
+		})...)
+		out = append(out, compareFlatMap(desired, ref, containerResources(desiredContainer, "limits"), containerResources(liveContainer, "limits"), mapComparison{
+			title:       "Container resource limit drift",
+			category:    "capacity",
+			severity:    "medium",
+			confidence:  0.91,
+			fieldPrefix: containerPath + ".resources.limits.",
+			equivalent:  equivalentQuantity,
+		})...)
+	}
+
+	return out
+}
+
+func namedPodTemplateContainers(spec map[string]any) map[string]map[string]any {
+	containers := make(map[string]map[string]any)
+	template, ok := spec["template"].(map[string]any)
+	if !ok {
+		return containers
+	}
+	podSpec, ok := template["spec"].(map[string]any)
+	if !ok {
+		return containers
+	}
+	rawContainers, ok := podSpec["containers"].([]any)
+	if !ok {
+		return containers
+	}
+	for _, rawContainer := range rawContainers {
+		container, ok := rawContainer.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, ok := container["name"].(string)
+		name = strings.TrimSpace(name)
+		if !ok || name == "" {
+			continue
+		}
+		containers[name] = container
+	}
+	return containers
+}
+
+func namedContainerKeys(desired, live map[string]map[string]any) []string {
+	keys := make(map[string]struct{}, len(desired)+len(live))
+	for name := range desired {
+		keys[name] = struct{}{}
+	}
+	for name := range live {
+		keys[name] = struct{}{}
+	}
+
+	out := make([]string, 0, len(keys))
+	for name := range keys {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func environmentVariables(container map[string]any) map[string]any {
+	variables := map[string]any{}
+	rawVariables, ok := container["env"].([]any)
+	if !ok {
+		return variables
+	}
+	for _, rawVariable := range rawVariables {
+		variable, ok := rawVariable.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, ok := variable["name"].(string)
+		name = strings.TrimSpace(name)
+		if !ok || name == "" {
+			continue
+		}
+		configuration := make(map[string]any, len(variable)-1)
+		for key, value := range variable {
+			if key != "name" {
+				configuration[key] = value
+			}
+		}
+		variables[name] = configuration
+	}
+	return variables
+}
+
+func containerResources(container map[string]any, class string) map[string]any {
+	return readMap(readMap(container, "resources"), class)
+}
+
+func equivalentQuantity(desired, live any) bool {
+	desiredText, desiredOK := quantityText(desired)
+	liveText, liveOK := quantityText(live)
+	if !desiredOK || !liveOK {
+		return reflect.DeepEqual(desired, live)
+	}
+
+	desiredQuantity, desiredErr := k8sresource.ParseQuantity(desiredText)
+	liveQuantity, liveErr := k8sresource.ParseQuantity(liveText)
+	if desiredErr != nil || liveErr != nil {
+		return reflect.DeepEqual(desired, live)
+	}
+	return desiredQuantity.Cmp(liveQuantity) == 0
+}
+
+func quantityText(value any) (string, bool) {
+	switch value.(type) {
+	case string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		return strings.TrimSpace(fmt.Sprint(value)), true
+	default:
+		return "", false
 	}
 }
 
