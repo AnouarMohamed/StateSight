@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -340,7 +341,15 @@ func namedPodTemplateContainers(spec map[string]any) map[string]map[string]any {
 }
 
 func namedContainerKeys(desired, live map[string]map[string]any) []string {
-	keys := make(map[string]struct{}, len(desired)+len(live))
+	capacity := len(desired)
+	if len(live) > 0 {
+		if capacity > math.MaxInt-len(live) {
+			capacity = math.MaxInt
+		} else {
+			capacity += len(live)
+		}
+	}
+	keys := make(map[string]struct{}, capacity)
 	for name := range desired {
 		keys[name] = struct{}{}
 	}
