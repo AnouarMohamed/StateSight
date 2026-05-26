@@ -73,7 +73,9 @@ A suppressed candidate does not create a drift incident. The worker stores a `su
 
 ## Operator Interface
 
-The web application is a dense, dark investigation console designed around scanning and evidence review. It surfaces compared field values, provenance trust state, absent attribution, and Kubernetes ownership caveats without implying unobserved causality. The visual and interaction contract is recorded in `PRODUCT.md` and `DESIGN.md`.
+The web application is a dense, warm-black Git-oriented investigation console designed around scanning and evidence review. Its compact sidebar and table language are adapted from the local GitOps forensic UI reference while all data and actions remain backed by StateSight APIs. It surfaces compared field values, provenance trust state, absent attribution, and Kubernetes ownership caveats without implying unobserved causality.
+
+The reference prototype contains separate Supabase-backed features, including AI insights, remediation actions, audit views, commit views, sync history, and cluster administration. Those screens are not exposed in StateSight until equivalent backend contracts exist. The shell uses the official orange Git logomark from [git-scm.com/community/logos](https://git-scm.com/community/logos), credited there to Jason Long under CC BY 3.0. The visual and interaction contract is recorded in `PRODUCT.md` and `DESIGN.md`.
 
 ## Architecture Overview
 
