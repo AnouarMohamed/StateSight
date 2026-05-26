@@ -82,6 +82,13 @@ type CreateIgnoreRuleParams struct {
 	CreatedBy       string
 }
 
+type UpdateIgnoreRuleParams struct {
+	ResourceRef     string
+	Name            string
+	MatchExpression string
+	Reason          string
+}
+
 type UpsertGitHubEventParams struct {
 	EventType  string
 	DeliveryID string

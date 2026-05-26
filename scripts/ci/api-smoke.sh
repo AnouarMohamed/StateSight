@@ -66,6 +66,17 @@ jq --exit-status --arg id "${rule_id}" \
   '.data.ignore_rules | any(.id == $id and .active == true)' \
   <<<"${details_response}" >/dev/null
 
+edit_response="$(
+  curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
+    --request PUT "${base_url}/api/v1/applications/${application_id}/ignore-rules/${rule_id}" \
+    --header "Content-Type: application/json" \
+    --data "{\"name\":\"${rule_name} updated\",\"match_expression\":\"spec.template.spec.containers[0].image\",\"resource_ref\":\"\",\"reason\":\"CI edit verification\"}"
+)"
+jq --exit-status \
+  --arg name "${rule_name} updated" \
+  '.success and .data.name == $name and .data.match_expression == "spec.template.spec.containers[0].image" and .data.resource_ref == "" and .data.reason == "CI edit verification"' \
+  <<<"${edit_response}" >/dev/null
+
 update_response="$(
   curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
     --request PATCH "${base_url}/api/v1/applications/${application_id}/ignore-rules/${rule_id}" \
@@ -73,3 +84,19 @@ update_response="$(
     --data '{"active":false}'
 )"
 jq --exit-status '.success and .data.active == false' <<<"${update_response}" >/dev/null
+
+delete_response="$(
+  curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
+    --request DELETE "${base_url}/api/v1/applications/${application_id}/ignore-rules/${rule_id}"
+)"
+jq --exit-status --arg id "${rule_id}" \
+  '.success and .data.id == $id and .data.status == "deleted"' \
+  <<<"${delete_response}" >/dev/null
+
+details_after_delete="$(
+  curl --fail --silent --show-error --connect-timeout 2 --max-time 10 \
+    "${base_url}/api/v1/applications/${application_id}"
+)"
+jq --exit-status --arg id "${rule_id}" \
+  '.data.ignore_rules | all(.id != $id)' \
+  <<<"${details_after_delete}" >/dev/null

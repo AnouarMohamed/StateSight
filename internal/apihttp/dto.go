@@ -10,7 +10,7 @@ type createApplicationRequest struct {
 	Namespace          string `json:"namespace"`
 }
 
-type createIgnoreRuleRequest struct {
+type ignoreRuleDetailsRequest struct {
 	Name            string `json:"name"`
 	MatchExpression string `json:"match_expression"`
 	ResourceRef     string `json:"resource_ref"`
