@@ -24,10 +24,12 @@ Require pull requests, at least one approving review, and review from code owner
 - Workflow policy: validates workflow files with fixed-version `actionlint` and parses CI shell helpers.
 - Go quality and security: verifies modules, formatting, `go vet`, Staticcheck, reachable-vulnerability analysis with `govulncheck`, and race-enabled tests with a retained coverage artifact.
 - Web quality and dependency audit: installs strictly from the lockfile, fails on npm advisories at moderate severity or above, runs ESLint, type-checks, and builds production assets.
-- Database migration and API smoke: boots PostgreSQL and Redis, applies migrations twice to verify replay safety, seeds data, and exercises scoped ignore-rule creation, list, edit, activation, and deletion through the API.
+- Database migration and API smoke: boots PostgreSQL and Redis, applies migrations twice to verify replay safety, seeds data, and exercises scoped ignore-rule creation, list, edit, activation, and deletion through the local unauthenticated demo API.
 - Container build and vulnerability scan: builds the deployable API, worker, and web images from digest-pinned bases with reusable Go build caches, verifies web runtime security headers, then fails on fixable high or critical vulnerabilities found by checksum-verified Grype.
 
 Only fixable high or critical container findings block merges. Non-fixable base-image findings remain visible in scanner output and must be evaluated during dependency/image updates rather than waived silently.
+
+OIDC token verification, insecure endpoint rejection, unprovisioned identity denial, and removal of trusted identity headers are covered in Go tests. The migration/API smoke path intentionally uses `AUTH_REQUIRED=false` because CI does not operate a real external identity provider.
 
 The worker builds `kubectl v1.34.8` from the checksum-verified official Kubernetes source archive with the pinned patched Go toolchain. The Alpine package carried a fixable embedded-module advisory, and the official prebuilt `v1.34.8` executable was compiled with a Go standard library version that the image gate rejects. Building the same Kubernetes minor line preserves the intended client compatibility boundary while removing those compiled-in findings. When changing this source release, update `KUBECTL_VERSION`, `KUBERNETES_GIT_COMMIT`, and `KUBERNETES_SRC_SHA256` together and rerun the image scan.
 

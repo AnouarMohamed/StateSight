@@ -75,3 +75,17 @@ Use this file to record meaningful project decisions as the codebase grows.
   Options considered: activation-only management, mutable application-owned rules with historical audit snapshots, mutable inherited workspace rules in the same surface.
   Chosen approach: authorize edit and confirmed-delete endpoints only for rules owned by the selected application; leave inherited workspace rows read-only; rely on persisted suppression snapshots and nullable rule references to preserve recorded history.
   Consequences: future analysis follows the operator's current scoped rules, existing suppression audit records remain interpretable after mutation or deletion, and workspace-wide administration still requires a separately reviewed design.
+
+- Date: 2026-05-26
+  Decision: Protected API identity is established through verified OIDC bearer tokens mapped to provisioned local users.
+  Context: The initial RBAC boundary trusted caller-supplied user headers, allowing an unauthenticated client to select another provisioned user's role.
+  Options considered: retain trusted proxy headers, treat an external token subject as the database user ID, or validate OIDC tokens and map external identities explicitly.
+  Chosen approach: require OIDC issuer/audience configuration when API authentication is enabled; validate token signature, issuer, audience, lifetime, and secure JWKS transport; resolve verified `(issuer, subject)` pairs through `user_identities` before evaluating workspace membership.
+  Consequences: clients cannot establish identity through `X-User-*` headers and external provider identifiers remain decoupled from internal user IDs; browser OIDC login and identity provisioning administration remain separate delivery work.
+
+- Date: 2026-05-26
+  Decision: Tenant-owned application relationships are enforced through workspace-qualified foreign keys.
+  Context: Authorization of `workspace_id` alone did not prevent an application insert from referring to a cluster or source definition in another workspace, and the same structural risk existed for scoped rules.
+  Options considered: rely on handler checks, validate relationships in repository queries only, or enforce tenant consistency in PostgreSQL.
+  Chosen approach: add composite foreign keys for application-to-cluster, application-to-source, and scoped-rule-to-application relationships, with API error handling for invalid application scope.
+  Consequences: writes cannot create cross-workspace ownership relationships even outside the HTTP handler; deployment of the constraint intentionally fails until any legacy mismatched data is repaired.

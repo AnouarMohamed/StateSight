@@ -31,6 +31,6 @@ It is designed to help teams understand drift between:
 
 ## Current Stage
 
-The baseline analyze flow exists: API, Redis-backed worker, Postgres persistence, React UI, Git manifest ingestion, `kubectl` live-state collection, first semantic diffs, persisted source/live/field-ownership provenance, application-scoped ignore-rule lifecycle management and suppression auditing, timelines, and workspace RBAC boundaries.
+The baseline analyze flow exists: API, Redis-backed worker, Postgres persistence, React UI, Git manifest ingestion, `kubectl` live-state collection, first semantic diffs, persisted source/live/field-ownership provenance, application-scoped ignore-rule lifecycle management and suppression auditing, timelines, and an OIDC-verified API boundary backed by workspace RBAC.
 
-Current work is to make analysis trustworthy beyond the baseline: correlation with additional operational evidence, deliberate workspace-wide rule controls, broader semantic coverage, stronger authentication, and test coverage around the processing pipeline.
+Current work is to make analysis trustworthy beyond the baseline: correlation with additional operational evidence, deliberate workspace-wide rule controls, broader semantic coverage, browser sign-in and identity provisioning workflows, and test coverage around the processing pipeline.

@@ -28,6 +28,7 @@ The current worker obtains desired state by cloning configured Git sources and o
 
 - PostgreSQL: source of truth for applications, snapshots, incidents, suppressed findings, scoped ignore rules, evidence, jobs, and event metadata.
 - Redis: lightweight queue transport for asynchronous work.
+- Workspace-qualified foreign keys prevent applications from binding cross-workspace clusters or sources and prevent application-scoped ignore rules from crossing the tenant boundary.
 
 ## Worker Runtime Configuration
 
@@ -35,6 +36,15 @@ The current worker obtains desired state by cloning configured Git sources and o
 - `GIT_CACHE_DIR`: temporary checkout parent directory.
 - `KUBECTL_BIN`: executable used for cluster collection.
 - `ALLOW_SYNTHETIC_LIVE_STATE`: optional demo-only fallback, disabled by default.
+
+## Authentication Boundary
+
+- With `AUTH_REQUIRED=true`, the API starts only after discovering the configured OIDC provider and constructing a verifier for the configured audience.
+- Protected API requests require a JWT bearer token validated against the discovered JWKS, issuer, audience, and token lifetime. HTTPS is required for issuer and JWKS retrieval unless a local-development insecure override is explicitly configured.
+- Verified `(issuer, subject)` identities resolve through `user_identities` to local users. Workspace access and editor actions remain governed by `workspace_memberships`.
+- `X-Workspace-ID` is only a selected scope for workspace collection endpoints; it never establishes caller identity. Resource-addressed endpoints authorize against the resource's persisted workspace.
+- The GitHub webhook remains outside the OIDC middleware and is authenticated through its HMAC webhook signature.
+- The static web client no longer supplies user identity headers. Interactive browser OIDC login is a separate integration still to be implemented.
 
 ## Ignore-Rule Evaluation
 
