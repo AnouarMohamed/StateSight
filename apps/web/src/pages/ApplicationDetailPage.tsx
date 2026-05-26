@@ -26,7 +26,7 @@ const emptyRuleDraft: CreateIgnoreRuleInput = {
 };
 
 const inputClass =
-  "mt-1.5 block h-9 w-full rounded-md border border-ops-border bg-ops-bg px-3 text-sm text-ops-text placeholder:text-ops-muted focus:border-ops-accent";
+  "mt-1.5 block h-8 w-full border border-ops-border bg-ops-bg px-2.5 text-xs text-ops-text placeholder:text-ops-dim focus:border-ops-accent";
 
 export function ApplicationDetailPage() {
   const params = useParams<{ id: string }>();
@@ -92,8 +92,8 @@ export function ApplicationDetailPage() {
   };
 
   return (
-    <section className="space-y-6">
-      <Link to="/applications" className="touch-target inline-flex items-center gap-2 text-sm text-ops-muted hover:text-ops-text">
+    <section className="space-y-4">
+      <Link to="/applications" className="touch-target inline-flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-ops-muted hover:text-ops-text">
         <ArrowLeft aria-hidden="true" className="h-4 w-4" />
         Applications
       </Link>
@@ -118,24 +118,26 @@ export function ApplicationDetailPage() {
       </PageHeader>
 
       {analyzeMutation.error ? <ErrorState>Unable to queue analysis: {(analyzeMutation.error as Error).message}</ErrorState> : null}
-      {analyzeMutation.isSuccess ? <p className="text-sm text-ops-good">Analysis job queued.</p> : null}
+      {analyzeMutation.isSuccess ? <p className="text-xs uppercase tracking-[0.08em] text-ops-good">Analysis job queued.</p> : null}
 
       <Panel>
-        <div aria-label="Application views" className="flex gap-1 overflow-x-auto border-b border-ops-border px-2 py-2">
+        <div aria-label="Application views" className="flex gap-1 overflow-x-auto border-b border-ops-border-muted px-2 py-2">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               aria-pressed={activeTab === tab.id}
-              className={`touch-target inline-flex h-10 shrink-0 items-center gap-2 rounded-md border px-3 text-sm transition-colors ${
+              className={`touch-target inline-flex h-8 shrink-0 items-center gap-2 border px-3 text-[10px] uppercase tracking-[0.08em] transition-colors ${
                 activeTab === tab.id
-                  ? "border-ops-border bg-ops-bg font-medium text-ops-text"
+                  ? "border-ops-action bg-ops-action font-medium text-ops-bg"
                   : "border-transparent text-ops-muted hover:bg-ops-panel-alt hover:text-ops-text"
               }`}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}
-              <span className="rounded-md bg-ops-bg px-2 py-0.5 font-mono text-xs text-ops-muted">{tabCounts[tab.id]}</span>
+              <span className={`px-1.5 py-0.5 font-mono text-[10px] ${activeTab === tab.id ? "bg-ops-accent-soft text-ops-text" : "bg-ops-panel-alt text-ops-muted"}`}>
+                {tabCounts[tab.id]}
+              </span>
             </button>
           ))}
         </div>
@@ -165,32 +167,32 @@ function IncidentList({ incidents }: { incidents: Awaited<ReturnType<typeof getA
   return (
     <>
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full text-sm">
-          <thead className="bg-ops-panel-alt text-left text-xs font-medium text-ops-muted">
+        <table className="w-full text-xs">
+          <thead className="bg-ops-panel-alt text-left text-[10px] uppercase tracking-[0.12em] text-ops-dim">
             <tr>
-              <th className="px-5 py-2.5">Incident</th>
-              <th className="px-5 py-2.5">Category</th>
-              <th className="px-5 py-2.5">Severity</th>
-              <th className="px-5 py-2.5">Recommendation</th>
-              <th className="px-5 py-2.5 text-right">Open</th>
+              <th className="px-3 py-2 font-normal">Incident</th>
+              <th className="px-3 py-2 font-normal">Category</th>
+              <th className="px-3 py-2 font-normal">Severity</th>
+              <th className="px-3 py-2 font-normal">Recommendation</th>
+              <th className="px-3 py-2 text-right font-normal">Open</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ops-border-muted">
             {incidents.map((incident) => (
               <tr key={incident.id} className="hover:bg-ops-panel-alt">
-                <td className="max-w-lg px-5 py-3">
+                <td className="max-w-lg px-3 py-2.5">
                   <p className="break-words font-medium">{incident.title}</p>
                   <p className="mt-1 text-xs text-ops-muted">{formatDate(incident.created_at)}</p>
                 </td>
-                <td className="px-5 py-3 text-ops-muted">{incident.category}</td>
-                <td className="px-5 py-3">
+                <td className="px-3 py-2.5 text-ops-muted">{incident.category}</td>
+                <td className="px-3 py-2.5">
                   <Badge label={incident.severity} tone={severityTone(incident.severity)} />
                 </td>
-                <td className="px-5 py-3">
+                <td className="px-3 py-2.5">
                   <Badge label={incident.recommended_action} tone={recommendationTone(incident.recommended_action)} />
                 </td>
-                <td className="px-5 py-3 text-right">
-                  <Link aria-label={`Open ${incident.title}`} className="touch-target inline-flex h-9 w-9 items-center justify-center rounded-md text-ops-muted hover:bg-ops-shell-hover hover:text-ops-text" to={`/incidents/${incident.id}`}>
+                <td className="px-3 py-2.5 text-right">
+                  <Link aria-label={`Open ${incident.title}`} className="touch-target inline-flex h-8 w-8 items-center justify-center text-ops-muted hover:bg-ops-shell-hover hover:text-ops-text" to={`/incidents/${incident.id}`}>
                     <ArrowRight aria-hidden="true" className="h-4 w-4" />
                   </Link>
                 </td>
@@ -207,7 +209,7 @@ function IncidentList({ incidents }: { incidents: Awaited<ReturnType<typeof getA
               <Badge label={incident.severity} tone={severityTone(incident.severity)} />
               <Badge label={incident.recommended_action} tone={recommendationTone(incident.recommended_action)} />
             </div>
-            <Link className="touch-target inline-flex items-center gap-2 text-sm font-medium text-ops-accent" to={`/incidents/${incident.id}`}>
+            <Link className="touch-target inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-ops-accent" to={`/incidents/${incident.id}`}>
               Open incident
               <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
@@ -225,28 +227,28 @@ function SuppressionList({ suppressions }: { suppressions: Awaited<ReturnType<ty
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-[720px] w-full text-sm">
-        <thead className="bg-ops-panel-alt text-left text-xs font-medium text-ops-muted">
+      <table className="min-w-[720px] w-full text-xs">
+        <thead className="bg-ops-panel-alt text-left text-[10px] uppercase tracking-[0.12em] text-ops-dim">
           <tr>
-            <th className="px-5 py-2.5">Field</th>
-            <th className="px-5 py-2.5">Resource</th>
-            <th className="px-5 py-2.5">Matched rule</th>
-            <th className="px-5 py-2.5">Suppressed</th>
+            <th className="px-3 py-2 font-normal">Field</th>
+            <th className="px-3 py-2 font-normal">Resource</th>
+            <th className="px-3 py-2 font-normal">Matched rule</th>
+            <th className="px-3 py-2 font-normal">Suppressed</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-ops-border-muted">
           {suppressions.map((suppression) => (
             <tr key={suppression.id} className="align-top hover:bg-ops-panel-alt">
-              <td className="px-5 py-3">
+              <td className="px-3 py-2.5">
                 <p className="break-all font-mono text-xs text-ops-text">{suppression.field_path}</p>
                 <p className="mt-1 max-w-sm break-words text-xs text-ops-muted">{suppression.title}</p>
               </td>
-              <td className="max-w-sm px-5 py-3 break-all font-mono text-xs text-ops-muted">{suppression.resource_ref}</td>
-              <td className="px-5 py-3">
+              <td className="max-w-sm px-3 py-2.5 break-all font-mono text-ops-muted">{suppression.resource_ref}</td>
+              <td className="px-3 py-2.5">
                 <p>{suppression.ignore_rule_name}</p>
                 <p className="mt-1 max-w-sm break-words text-xs text-ops-muted">{suppression.ignore_rule_reason}</p>
               </td>
-              <td className="whitespace-nowrap px-5 py-3 text-ops-muted">{formatDate(suppression.suppressed_at)}</td>
+              <td className="whitespace-nowrap px-3 py-2.5 text-ops-muted">{formatDate(suppression.suppressed_at)}</td>
             </tr>
           ))}
         </tbody>
@@ -273,7 +275,7 @@ function IgnoreRules({
   return (
     <div>
       <form
-        className="border-b border-ops-border bg-ops-panel-alt px-4 py-4 sm:px-5"
+        className="border-b border-ops-border-muted bg-ops-panel-alt px-3 py-3"
         onSubmit={(event) => {
           event.preventDefault();
           createRuleMutation.mutate(draft);
@@ -281,7 +283,7 @@ function IgnoreRules({
       >
         <div className="mb-4 flex items-center gap-2">
           <Plus aria-hidden="true" className="h-4 w-4 text-ops-muted" />
-          <h2 className="text-sm font-semibold">New application rule</h2>
+          <h2 className="text-[10px] uppercase tracking-[0.12em] text-ops-dim">New application rule</h2>
         </div>
         <div className="grid gap-4 lg:grid-cols-4">
           <RuleInput
@@ -326,32 +328,32 @@ function IgnoreRules({
         <EmptyState>No ignore rules configured for this application.</EmptyState>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-[760px] w-full text-sm">
-            <thead className="bg-ops-panel-alt text-left text-xs font-medium text-ops-muted">
+          <table className="min-w-[760px] w-full text-xs">
+            <thead className="bg-ops-panel-alt text-left text-[10px] uppercase tracking-[0.12em] text-ops-dim">
               <tr>
-                <th className="px-5 py-2.5">Rule</th>
-                <th className="px-5 py-2.5">Match</th>
-                <th className="px-5 py-2.5">Scope</th>
-                <th className="px-5 py-2.5">Status</th>
-                <th className="px-5 py-2.5 text-right">Action</th>
+                <th className="px-3 py-2 font-normal">Rule</th>
+                <th className="px-3 py-2 font-normal">Match</th>
+                <th className="px-3 py-2 font-normal">Scope</th>
+                <th className="px-3 py-2 font-normal">Status</th>
+                <th className="px-3 py-2 text-right font-normal">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ops-border-muted">
               {rules.map((rule) => (
                 <tr key={rule.id} className="align-top hover:bg-ops-panel-alt">
-                  <td className="px-5 py-3">
+                  <td className="px-3 py-2.5">
                     <p className="break-words font-medium">{rule.name}</p>
                     <p className="mt-1 max-w-xs break-words text-xs text-ops-muted">{rule.reason}</p>
                   </td>
-                  <td className="px-5 py-3 break-all font-mono text-xs text-ops-text">{rule.match_expression}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-3 py-2.5 break-all font-mono text-ops-text">{rule.match_expression}</td>
+                  <td className="px-3 py-2.5">
                     <p>{rule.application_id ? "Application" : "Workspace (inherited)"}</p>
                     {rule.resource_ref ? <p className="mt-1 max-w-sm break-all font-mono text-xs text-ops-muted">{rule.resource_ref}</p> : null}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-3 py-2.5">
                     <Badge label={rule.active ? "Active" : "Inactive"} tone={rule.active ? "good" : "neutral"} />
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-3 py-2.5 text-right">
                     {rule.application_id === applicationId ? (
                       <ActionButton
                         variant="quiet"
@@ -371,7 +373,7 @@ function IgnoreRules({
           </table>
         </div>
       )}
-      {ruleStatusMutation.error ? <p className="px-5 py-3 text-sm text-ops-bad">{ruleStatusMutation.error.message}</p> : null}
+      {ruleStatusMutation.error ? <p className="px-3 py-2.5 text-xs text-ops-bad">{ruleStatusMutation.error.message}</p> : null}
     </div>
   );
 }
@@ -392,7 +394,7 @@ function RuleInput({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="min-w-0 text-sm text-ops-muted" htmlFor={id}>
+    <label className="min-w-0 text-[10px] uppercase tracking-[0.08em] text-ops-muted" htmlFor={id}>
       {label}
       <input
         id={id}

@@ -14,12 +14,13 @@ StateSight compares desired state from Git with live cluster state, groups drift
 
 ## Brand Personality
 
-Precise, calm, forensic. The product should have the density and familiar control language of a serious engineering tool, with a GitHub dark-interface sensibility: graphite work surfaces, clear borders, compact tables, and restrained state color.
+Precise, calm, forensic. The product should feel like a Git-oriented evidence terminal: warm-black work surfaces, hairline structure, compact tables, orange selection and command state, and a visible Git relationship without implying that Git itself is the product.
 
 ## Anti-references
 
 - Generic SaaS dashboard compositions with hero metrics, marketing copy, large decorative cards, or presentation-style panels.
 - Purple or blue gradients, glow effects, glass surfaces, and visual decoration disconnected from operator work.
+- Unverified health scores, AI summaries, or operational controls copied from a visual reference without backend evidence behind them.
 - Interfaces that bury provenance behind vague labels or imply attribution that the evidence does not support.
 - Loose spacing, oversized typography, or mobile behavior that turns investigation data into an unreadable desktop table.
 

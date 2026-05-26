@@ -18,7 +18,7 @@ export function OverviewPage() {
     return (
       <ErrorState
         action={
-          <button className="touch-target rounded-md border border-ops-bad-border px-3 py-2 text-sm text-ops-text hover:bg-ops-panel" onClick={() => void refetch()} type="button">
+          <button className="touch-target border border-ops-bad-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-ops-text hover:bg-ops-panel" onClick={() => void refetch()} type="button">
             Retry
           </button>
         }
@@ -49,10 +49,10 @@ export function OverviewPage() {
   ];
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <PageHeader
-        label="Operations / Overview"
-        title="System posture"
+        label="Operations"
+        title="Operational status"
         actions={
           <Link to="/applications" className={actionLinkClass}>
             Applications
@@ -71,18 +71,18 @@ export function OverviewPage() {
       </Panel>
 
       <Panel>
-        <div className="border-b border-ops-border px-4 py-3 sm:px-5">
-          <h2 className="text-sm font-semibold">Review queue</h2>
+        <div className="border-b border-ops-border-muted px-3 py-2">
+          <h2 className="text-[10px] uppercase tracking-[0.12em] text-ops-dim">Review queue</h2>
         </div>
-        <div className="divide-y divide-ops-border">
+        <div className="divide-y divide-ops-border-muted">
           {queueRows.map(({ label, count, state, icon: Icon, tone }) => (
-            <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 px-4 py-3 text-sm sm:px-5">
+            <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4 px-3 py-2.5 text-xs">
               <span className="flex min-w-0 items-center gap-3">
                 <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${tone}`} />
                 <span className="truncate">{label}</span>
               </span>
               <span className="font-mono text-xs text-ops-muted">{count}</span>
-              <span className={`min-w-24 text-right font-medium ${tone}`}>{state}</span>
+              <span className={`min-w-24 text-right text-[10px] font-medium uppercase tracking-[0.08em] ${tone}`}>{state}</span>
             </div>
           ))}
         </div>
@@ -103,11 +103,11 @@ function SummaryTotal({
   urgent?: boolean;
 }) {
   return (
-    <div className="flex min-h-20 items-center gap-3 px-4 py-3 sm:px-5">
+    <div className="flex min-h-20 items-center gap-3 px-3 py-3">
       <Icon aria-hidden="true" className={`h-4 w-4 shrink-0 ${urgent ? "text-ops-bad" : "text-ops-muted"}`} />
       <div className="min-w-0">
-        <dt className="text-xs text-ops-muted">{label}</dt>
-        <dd className={`mt-1 text-lg font-semibold ${urgent ? "text-ops-bad" : "text-ops-text"}`}>{value}</dd>
+        <dt className="text-[10px] uppercase tracking-[0.12em] text-ops-dim">{label}</dt>
+        <dd className={`mt-1 font-mono text-xl ${urgent ? "text-ops-accent" : "text-ops-text"}`}>{value}</dd>
       </div>
     </div>
   );

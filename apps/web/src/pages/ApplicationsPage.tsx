@@ -49,20 +49,20 @@ export function ApplicationsPage() {
   }
 
   return (
-    <section className="space-y-6">
-      <PageHeader label="Inventory / Applications" title="Applications">
+    <section className="space-y-4">
+      <PageHeader label="Inventory" title="Applications">
         <span>{data?.length ?? 0} tracked workloads</span>
       </PageHeader>
 
       {analyzeMutation.error ? <ErrorState>Unable to queue analysis: {(analyzeMutation.error as Error).message}</ErrorState> : null}
 
       <Panel>
-        <div className="flex flex-wrap items-center justify-end gap-4 border-b border-ops-border px-4 py-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-end gap-4 border-b border-ops-border-muted px-3 py-2">
           <label className="relative block w-full sm:w-72">
             <span className="sr-only">Filter applications</span>
-            <Search aria-hidden="true" className="absolute left-3 top-2.5 h-4 w-4 text-ops-muted" />
+            <Search aria-hidden="true" className="absolute left-2.5 top-2 h-3.5 w-3.5 text-ops-dim" />
             <input
-              className="h-9 w-full rounded-md border border-ops-border bg-ops-bg px-3 pl-9 text-sm text-ops-text placeholder:text-ops-muted"
+              className="h-8 w-full border border-ops-border bg-ops-bg px-2.5 pl-8 text-xs text-ops-text placeholder:text-ops-dim"
               placeholder="Filter applications"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -75,30 +75,30 @@ export function ApplicationsPage() {
         ) : (
           <>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
-                <thead className="bg-ops-panel-alt text-left text-xs font-medium text-ops-muted">
+              <table className="w-full text-xs">
+                <thead className="bg-ops-panel-alt text-left text-[10px] uppercase tracking-[0.12em] text-ops-dim">
                   <tr>
-                    <th className="px-5 py-2.5">Application</th>
-                    <th className="px-5 py-2.5">Namespace</th>
-                    <th className="px-5 py-2.5">Status</th>
-                    <th className="px-5 py-2.5">Updated</th>
-                    <th className="px-5 py-2.5 text-right">Actions</th>
+                    <th className="px-3 py-2 font-normal">Application</th>
+                    <th className="px-3 py-2 font-normal">Namespace</th>
+                    <th className="px-3 py-2 font-normal">Status</th>
+                    <th className="px-3 py-2 font-normal">Updated</th>
+                    <th className="px-3 py-2 text-right font-normal">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-ops-border-muted">
                   {applications.map((app) => (
                     <tr key={app.id} className="transition-colors hover:bg-ops-panel-alt">
-                      <td className="px-5 py-3">
+                      <td className="px-3 py-2.5">
                         <Link className="break-words font-medium text-ops-accent hover:underline" to={`/applications/${app.id}`}>
                           {app.name}
                         </Link>
                       </td>
-                      <td className="px-5 py-3 font-mono text-xs text-ops-muted">{app.namespace}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-3 py-2.5 font-mono text-ops-muted">{app.namespace}</td>
+                      <td className="px-3 py-2.5">
                         <Badge label={app.status} tone={severityTone(app.status === "active" ? "low" : "medium")} />
                       </td>
-                      <td className="whitespace-nowrap px-5 py-3 text-ops-muted">{formatDate(app.updated_at)}</td>
-                      <td className="px-5 py-3">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-ops-muted">{formatDate(app.updated_at)}</td>
+                      <td className="px-3 py-2.5">
                         <div className="flex justify-end gap-2">
                           <ActionButton
                             icon={Play}
@@ -110,7 +110,7 @@ export function ApplicationsPage() {
                           </ActionButton>
                           <Link
                             aria-label={`Open ${app.name}`}
-                            className="touch-target inline-flex h-9 w-9 items-center justify-center rounded-md text-ops-muted hover:bg-ops-shell-hover hover:text-ops-text"
+                            className="touch-target inline-flex h-8 w-8 items-center justify-center text-ops-muted hover:bg-ops-shell-hover hover:text-ops-text"
                             to={`/applications/${app.id}`}
                           >
                             <ArrowRight aria-hidden="true" className="h-4 w-4" />
@@ -139,7 +139,7 @@ export function ApplicationsPage() {
                     <ActionButton icon={Play} onClick={() => analyzeMutation.mutate(app.id)} disabled={analyzeMutation.isPending} type="button">
                       Analyze
                     </ActionButton>
-                    <Link className="touch-target inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-ops-accent" to={`/applications/${app.id}`}>
+                    <Link className="touch-target inline-flex h-8 items-center gap-2 px-3 text-xs font-medium uppercase tracking-[0.08em] text-ops-accent" to={`/applications/${app.id}`}>
                       Open
                       <ArrowRight aria-hidden="true" className="h-4 w-4" />
                     </Link>
