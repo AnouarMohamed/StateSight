@@ -38,3 +38,6 @@ coverage.out
 *.log
 tmp/
 .cache/
+
+# --- Local design references ---
+/refrence/gitops/project/
