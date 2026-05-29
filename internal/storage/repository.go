@@ -61,12 +61,6 @@ func (r *Repository) WithTx(ctx context.Context, fn func(q Querier) error) error
 	return nil
 }
 
-// getQuerier returns the pool by default. This helper is intended for future
-// refactoring where methods might optionally take a Querier.
-func (r *Repository) getQuerier() Querier {
-	return r.pool
-}
-
 func (r *Repository) Ping(ctx context.Context) error {
 	if err := r.pool.Ping(ctx); err != nil {
 		return fmt.Errorf("ping database: %w", err)
