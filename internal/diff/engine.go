@@ -101,7 +101,9 @@ func (e SemanticEngine) Compare(_ context.Context, _ model.Application, desired 
 func compareResource(desired, live normalize.Resource) []Finding {
 	out := make([]Finding, 0)
 	ref := resourceRef(desired)
+	tracker := newPathTracker()
 
+	// 1. Specialized High-Confidence Checks
 	desiredReplicas, desiredHasReplicas := readNumber(desired.Spec, "replicas")
 	liveReplicas, liveHasReplicas := readNumber(live.Spec, "replicas")
 	if desiredHasReplicas && liveHasReplicas && desiredReplicas != liveReplicas {
@@ -117,6 +119,7 @@ func compareResource(desired, live normalize.Resource) []Finding {
 			LiveValue:      fmt.Sprintf("%d", liveReplicas),
 			DifferenceType: "modified",
 		})
+		tracker.markHandled("spec.replicas")
 	}
 
 	desiredImage, desiredHasImage := firstContainerImage(desired.Spec)
@@ -134,25 +137,13 @@ func compareResource(desired, live normalize.Resource) []Finding {
 			LiveValue:      liveImage,
 			DifferenceType: "modified",
 		})
+		tracker.markHandled("spec.template.spec.containers[0].image")
 	}
 
-	out = append(out, comparePodTemplateContainers(desired, live, ref)...)
+	// 1c. Pod Template Containers (env, resources, etc.)
+	out = append(out, comparePodTemplateContainers(desired, live, ref, tracker)...)
 
-	out = append(out, compareFlatMap(desired, ref, desired.Annotations, live.Annotations, mapComparison{
-		title:       "Annotation drift",
-		category:    "metadata",
-		severity:    "low",
-		confidence:  0.73,
-		fieldPrefix: "metadata.annotations.",
-	})...)
-	out = append(out, compareFlatMap(desired, ref, desired.Labels, live.Labels, mapComparison{
-		title:       "Label drift",
-		category:    "metadata",
-		severity:    "low",
-		confidence:  0.78,
-		fieldPrefix: "metadata.labels.",
-	})...)
-
+	// 1d. Service Selectors
 	if strings.TrimSpace(desired.Kind) == "Service" {
 		out = append(out, compareFlatMap(desired, ref, readMap(desired.Spec, "selector"), readMap(live.Spec, "selector"), mapComparison{
 			title:       "Service selector drift",
@@ -160,10 +151,198 @@ func compareResource(desired, live normalize.Resource) []Finding {
 			severity:    "high",
 			confidence:  0.92,
 			fieldPrefix: "spec.selector.",
+			tracker:     tracker,
 		})...)
 	}
 
+	// 2. Metadata Comparison (Labels & Annotations)
+	out = append(out, compareFlatMap(desired, ref, desired.Annotations, live.Annotations, mapComparison{
+		title:       "Annotation drift",
+		category:    "metadata",
+		severity:    "low",
+		confidence:  0.73,
+		fieldPrefix: "metadata.annotations.",
+		tracker:     tracker,
+	})...)
+	out = append(out, compareFlatMap(desired, ref, desired.Labels, live.Labels, mapComparison{
+		title:       "Label drift",
+		category:    "metadata",
+		severity:    "low",
+		confidence:  0.78,
+		fieldPrefix: "metadata.labels.",
+		tracker:     tracker,
+	})...)
+
+	// 3. Generic Recursive Fallback
+	// This catches everything else in 'spec' that wasn't covered above.
+	genericFindings := recursiveCompare(desired.Key, ref, desired.Spec, live.Spec, "spec", tracker)
+	out = append(out, genericFindings...)
+
 	return out
+}
+
+type pathTracker struct {
+	handled map[string]struct{}
+}
+
+func newPathTracker() *pathTracker {
+	return &pathTracker{handled: make(map[string]struct{})}
+}
+
+func (t *pathTracker) markHandled(path string) {
+	t.handled[path] = struct{}{}
+}
+
+func (t *pathTracker) isHandled(path string) bool {
+	_, ok := t.handled[path]
+	return ok
+}
+
+func recursiveCompare(resourceKey, resourceRef string, desired, live any, path string, tracker *pathTracker) []Finding {
+	if tracker.isHandled(path) {
+		return nil
+	}
+
+	// Semantic awareness: handle resource quantities in generic diff
+	if isQuantityPath(path) && equivalentQuantity(desired, live) {
+		return nil
+	}
+
+	// Type mismatch: if types are different, it's a modification at this level
+	if reflect.TypeOf(desired) != reflect.TypeOf(live) {
+		return []Finding{newGenericFinding(resourceKey, resourceRef, path, desired, live)}
+	}
+
+	switch d := desired.(type) {
+	case map[string]any:
+		l := live.(map[string]any)
+		return compareMaps(resourceKey, resourceRef, d, l, path, tracker)
+	case []any:
+		l := live.([]any)
+		return compareSlices(resourceKey, resourceRef, d, l, path, tracker)
+	default:
+		if !reflect.DeepEqual(desired, live) {
+			return []Finding{newGenericFinding(resourceKey, resourceRef, path, desired, live)}
+		}
+	}
+
+	return nil
+}
+
+func compareMaps(resourceKey, resourceRef string, desired, live map[string]any, path string, tracker *pathTracker) []Finding {
+	out := make([]Finding, 0)
+	keys := mapKeys(desired, live)
+
+	for _, k := range keys {
+		fieldPath := path + "." + k
+		if tracker.isHandled(fieldPath) {
+			continue
+		}
+
+		dVal, dExists := desired[k]
+		lVal, lExists := live[k]
+
+		switch {
+		case !dExists:
+			out = append(out, Finding{
+				Title:          fmt.Sprintf("Unexpected field '%s'", fieldPath),
+				Category:       "configuration",
+				Severity:       "low",
+				Confidence:     0.7,
+				ResourceKey:    resourceKey,
+				ResourceRef:    resourceRef,
+				FieldPath:      fieldPath,
+				DesiredValue:   "<absent>",
+				LiveValue:      displayJSONValue(lVal, true),
+				DifferenceType: "added",
+			})
+		case !lExists:
+			out = append(out, Finding{
+				Title:          fmt.Sprintf("Missing field '%s'", fieldPath),
+				Category:       "configuration",
+				Severity:       "medium",
+				Confidence:     0.8,
+				ResourceKey:    resourceKey,
+				ResourceRef:    resourceRef,
+				FieldPath:      fieldPath,
+				DesiredValue:   displayJSONValue(dVal, true),
+				LiveValue:      "<absent>",
+				DifferenceType: "removed",
+			})
+		default:
+			out = append(out, recursiveCompare(resourceKey, resourceRef, dVal, lVal, fieldPath, tracker)...)
+		}
+	}
+	return out
+}
+
+func compareSlices(resourceKey, resourceRef string, desired, live []any, path string, tracker *pathTracker) []Finding {
+	out := make([]Finding, 0)
+	maxLen := len(desired)
+	if len(live) > maxLen {
+		maxLen = len(live)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		fieldPath := fmt.Sprintf("%s[%d]", path, i)
+		if tracker.isHandled(fieldPath) {
+			continue
+		}
+
+		dExists := i < len(desired)
+		lExists := i < len(live)
+
+		switch {
+		case !dExists:
+			out = append(out, Finding{
+				Title:          fmt.Sprintf("Extra element in '%s'", path),
+				Category:       "configuration",
+				Severity:       "low",
+				Confidence:     0.65,
+				ResourceKey:    resourceKey,
+				ResourceRef:    resourceRef,
+				FieldPath:      fieldPath,
+				DesiredValue:   "<absent>",
+				LiveValue:      displayJSONValue(live[i], true),
+				DifferenceType: "added",
+			})
+		case !lExists:
+			out = append(out, Finding{
+				Title:          fmt.Sprintf("Missing element in '%s'", path),
+				Category:       "configuration",
+				Severity:       "medium",
+				Confidence:     0.75,
+				ResourceKey:    resourceKey,
+				ResourceRef:    resourceRef,
+				FieldPath:      fieldPath,
+				DesiredValue:   displayJSONValue(desired[i], true),
+				LiveValue:      "<absent>",
+				DifferenceType: "removed",
+			})
+		default:
+			out = append(out, recursiveCompare(resourceKey, resourceRef, desired[i], live[i], fieldPath, tracker)...)
+		}
+	}
+	return out
+}
+
+func newGenericFinding(resourceKey, resourceRef, path string, desired, live any) Finding {
+	return Finding{
+		Title:          fmt.Sprintf("Field '%s' modified", path),
+		Category:       "configuration",
+		Severity:       "medium",
+		Confidence:     0.85,
+		ResourceKey:    resourceKey,
+		ResourceRef:    resourceRef,
+		FieldPath:      path,
+		DesiredValue:   displayJSONValue(desired, true),
+		LiveValue:      displayJSONValue(live, true),
+		DifferenceType: "modified",
+	}
+}
+
+func isQuantityPath(path string) bool {
+	return strings.Contains(path, ".resources.requests.") || strings.Contains(path, ".resources.limits.")
 }
 
 type mapComparison struct {
@@ -175,6 +354,7 @@ type mapComparison struct {
 	fieldSuffix string
 	display     func(any, bool) string
 	equivalent  func(any, any) bool
+	tracker     *pathTracker
 }
 
 func compareFlatMap(resource normalize.Resource, ref string, desired, live map[string]any, comparison mapComparison) []Finding {
@@ -184,6 +364,11 @@ func compareFlatMap(resource normalize.Resource, ref string, desired, live map[s
 		display = displayMapValue
 	}
 	for _, key := range mapKeys(desired, live) {
+		fieldPath := comparison.fieldPrefix + key + comparison.fieldSuffix
+		if comparison.tracker != nil && comparison.tracker.isHandled(fieldPath) {
+			continue
+		}
+
 		desiredValue, desiredExists := desired[key]
 		liveValue, liveExists := live[key]
 		equivalent := reflect.DeepEqual(desiredValue, liveValue)
@@ -201,11 +386,15 @@ func compareFlatMap(resource normalize.Resource, ref string, desired, live map[s
 			Confidence:     comparison.confidence,
 			ResourceKey:    resource.Key,
 			ResourceRef:    ref,
-			FieldPath:      comparison.fieldPrefix + key + comparison.fieldSuffix,
+			FieldPath:      fieldPath,
 			DesiredValue:   display(desiredValue, desiredExists),
 			LiveValue:      display(liveValue, liveExists),
 			DifferenceType: mapDifferenceType(desiredExists, liveExists),
 		})
+
+		if comparison.tracker != nil {
+			comparison.tracker.markHandled(fieldPath)
+		}
 	}
 	return out
 }
@@ -239,7 +428,7 @@ func mapDifferenceType(desiredExists, liveExists bool) string {
 	}
 }
 
-func comparePodTemplateContainers(desired, live normalize.Resource, ref string) []Finding {
+func comparePodTemplateContainers(desired, live normalize.Resource, ref string, tracker *pathTracker) []Finding {
 	desiredContainers := namedPodTemplateContainers(desired.Spec)
 	liveContainers := namedPodTemplateContainers(live.Spec)
 	out := make([]Finding, 0)
@@ -263,6 +452,7 @@ func comparePodTemplateContainers(desired, live normalize.Resource, ref string) 
 				LiveValue:      "present",
 				DifferenceType: "added",
 			})
+			tracker.markHandled(containerPath)
 			continue
 		case !liveExists:
 			out = append(out, Finding{
@@ -277,6 +467,7 @@ func comparePodTemplateContainers(desired, live normalize.Resource, ref string) 
 				LiveValue:      "<absent>",
 				DifferenceType: "removed",
 			})
+			tracker.markHandled(containerPath)
 			continue
 		}
 
@@ -288,6 +479,7 @@ func comparePodTemplateContainers(desired, live normalize.Resource, ref string) 
 			fieldPrefix: containerPath + ".env[name=",
 			fieldSuffix: "]",
 			display:     displayJSONValue,
+			tracker:     tracker,
 		})...)
 		out = append(out, compareFlatMap(desired, ref, containerResources(desiredContainer, "requests"), containerResources(liveContainer, "requests"), mapComparison{
 			title:       "Container resource request drift",
@@ -296,6 +488,7 @@ func comparePodTemplateContainers(desired, live normalize.Resource, ref string) 
 			confidence:  0.91,
 			fieldPrefix: containerPath + ".resources.requests.",
 			equivalent:  equivalentQuantity,
+			tracker:     tracker,
 		})...)
 		out = append(out, compareFlatMap(desired, ref, containerResources(desiredContainer, "limits"), containerResources(liveContainer, "limits"), mapComparison{
 			title:       "Container resource limit drift",
@@ -304,6 +497,7 @@ func comparePodTemplateContainers(desired, live normalize.Resource, ref string) 
 			confidence:  0.91,
 			fieldPrefix: containerPath + ".resources.limits.",
 			equivalent:  equivalentQuantity,
+			tracker:     tracker,
 		})...)
 	}
 
