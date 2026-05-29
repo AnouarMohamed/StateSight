@@ -89,6 +89,29 @@ type UpdateIgnoreRuleParams struct {
 	Reason          string
 }
 
+// UpsertIncidentParams provides the context needed to either create a new drift incident
+// or update an existing open one for the same resource and field.
+type UpsertIncidentParams struct {
+	ApplicationID     string
+	DesiredSnapshotID string
+	LiveSnapshotID    string
+	Finding           DriftFinding
+	RecommendedAction string
+}
+
+// DriftFinding represents a single point of drift detected during analysis.
+type DriftFinding struct {
+	Title          string
+	Category       string
+	Severity       string
+	Confidence     float64
+	ResourceRef    string
+	FieldPath      string
+	DesiredValue   string
+	LiveValue      string
+	DifferenceType string
+}
+
 type UpsertGitHubEventParams struct {
 	EventType  string
 	DeliveryID string

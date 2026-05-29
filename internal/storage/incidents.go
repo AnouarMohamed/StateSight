@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -11,7 +12,13 @@ import (
 	"github.com/AnouarMohamed/StateSight/pkg/model"
 )
 
+// CreateIncident inserts a new drift incident.
+// Note: Prefer UpsertIncident for analysis runs to avoid duplication.
 func (r *Repository) CreateIncident(ctx context.Context, params CreateIncidentParams) (model.DriftIncident, error) {
+	return createIncident(ctx, r.pool, params)
+}
+
+func createIncident(ctx context.Context, q Querier, params CreateIncidentParams) (model.DriftIncident, error) {
 	const query = `
 		INSERT INTO drift_incidents (
 			id, application_id, desired_snapshot_id, live_snapshot_id,
@@ -22,7 +29,7 @@ func (r *Repository) CreateIncident(ctx context.Context, params CreateIncidentPa
 	`
 	id := uuid.NewString()
 	var incident model.DriftIncident
-	err := r.pool.QueryRow(
+	err := q.QueryRow(
 		ctx,
 		query,
 		id,
@@ -55,7 +62,109 @@ func (r *Repository) CreateIncident(ctx context.Context, params CreateIncidentPa
 	return incident, nil
 }
 
+// UpsertIncident performs a "smart" save of a drift finding.
+// It looks for an existing 'open' incident for the same resource and field.
+// If found, it updates the live value and confidence. If not, it creates a new incident and drift field.
+func (r *Repository) UpsertIncident(ctx context.Context, q Querier, params UpsertIncidentParams) (model.DriftIncident, error) {
+	const findExistingQuery = `
+		SELECT di.id
+		FROM drift_incidents di
+		JOIN drift_fields df ON df.incident_id = di.id
+		WHERE di.application_id = $1
+		  AND di.status = 'open'
+		  AND df.resource_ref = $2
+		  AND df.field_path = $3
+		LIMIT 1
+	`
+
+	var existingID string
+	err := q.QueryRow(ctx, findExistingQuery, params.ApplicationID, params.Finding.ResourceRef, params.Finding.FieldPath).Scan(&existingID)
+
+	if err == nil {
+		// Update existing incident
+		const updateIncidentQuery = `
+			UPDATE drift_incidents
+			SET desired_snapshot_id = $1,
+			    live_snapshot_id = $2,
+			    confidence = $3,
+			    updated_at = NOW()
+			WHERE id = $4
+			RETURNING id, application_id, desired_snapshot_id, live_snapshot_id, title, category, severity, confidence, recommended_action, status, created_at, updated_at
+		`
+		var incident model.DriftIncident
+		err = q.QueryRow(ctx, updateIncidentQuery, params.DesiredSnapshotID, params.LiveSnapshotID, params.Finding.Confidence, existingID).Scan(
+			&incident.ID,
+			&incident.ApplicationID,
+			&incident.DesiredSnapshotID,
+			&incident.LiveSnapshotID,
+			&incident.Title,
+			&incident.Category,
+			&incident.Severity,
+			&incident.Confidence,
+			&incident.RecommendedAction,
+			&incident.Status,
+			&incident.CreatedAt,
+			&incident.UpdatedAt,
+		)
+		if err != nil {
+			return model.DriftIncident{}, fmt.Errorf("update existing incident: %w", err)
+		}
+
+		const updateFieldQuery = `
+			UPDATE drift_fields
+			SET desired_value = $1,
+			    live_value = $2,
+			    difference_type = $3
+			WHERE incident_id = $4 AND resource_ref = $5 AND field_path = $6
+		`
+		_, err = q.Exec(ctx, updateFieldQuery, params.Finding.DesiredValue, params.Finding.LiveValue, params.Finding.DifferenceType, existingID, params.Finding.ResourceRef, params.Finding.FieldPath)
+		if err != nil {
+			return model.DriftIncident{}, fmt.Errorf("update existing drift field: %w", err)
+		}
+
+		return incident, nil
+	}
+
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return model.DriftIncident{}, fmt.Errorf("lookup existing incident: %w", err)
+	}
+
+	// Create new incident
+	incident, err := createIncident(ctx, q, CreateIncidentParams{
+		ApplicationID:     params.ApplicationID,
+		DesiredSnapshotID: params.DesiredSnapshotID,
+		LiveSnapshotID:    params.LiveSnapshotID,
+		Title:             params.Finding.Title,
+		Category:          params.Finding.Category,
+		Severity:          params.Finding.Severity,
+		Confidence:        params.Finding.Confidence,
+		RecommendedAction: params.RecommendedAction,
+		Status:            "open",
+	})
+	if err != nil {
+		return model.DriftIncident{}, err
+	}
+
+	_, err = createDriftField(ctx, q, CreateDriftFieldParams{
+		IncidentID:     incident.ID,
+		ResourceRef:    params.Finding.ResourceRef,
+		FieldPath:      params.Finding.FieldPath,
+		DesiredValue:   params.Finding.DesiredValue,
+		LiveValue:      params.Finding.LiveValue,
+		DifferenceType: params.Finding.DifferenceType,
+	})
+	if err != nil {
+		return model.DriftIncident{}, err
+	}
+
+	return incident, nil
+}
+
 func (r *Repository) CreateDriftField(ctx context.Context, params CreateDriftFieldParams) (model.DriftField, error) {
+	return createDriftField(ctx, r.pool, params)
+}
+
+func createDriftField(ctx context.Context, q Querier, params CreateDriftFieldParams) (model.DriftField, error) {
 	const query = `
 		INSERT INTO drift_fields (id, incident_id, resource_ref, field_path, desired_value, live_value, difference_type)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -63,7 +172,7 @@ func (r *Repository) CreateDriftField(ctx context.Context, params CreateDriftFie
 	`
 	id := uuid.NewString()
 	var field model.DriftField
-	err := r.pool.QueryRow(
+	err := q.QueryRow(
 		ctx,
 		query,
 		id,
@@ -90,6 +199,10 @@ func (r *Repository) CreateDriftField(ctx context.Context, params CreateDriftFie
 }
 
 func (r *Repository) CreateEvidenceRecord(ctx context.Context, params CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
+	return r.CreateEvidenceRecordWithQuerier(ctx, r.pool, params)
+}
+
+func (r *Repository) CreateEvidenceRecordWithQuerier(ctx context.Context, q Querier, params CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
 	const query = `
 		INSERT INTO evidence_records (id, incident_id, source, detail, actor, confidence, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
@@ -97,7 +210,7 @@ func (r *Repository) CreateEvidenceRecord(ctx context.Context, params CreateEvid
 	`
 	id := uuid.NewString()
 	var record model.EvidenceRecord
-	err := r.pool.QueryRow(
+	err := q.QueryRow(
 		ctx,
 		query,
 		id,

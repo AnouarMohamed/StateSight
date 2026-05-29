@@ -27,12 +27,12 @@ type Store interface {
 	GetSourceDefinitionByID(ctx context.Context, id string) (model.SourceDefinition, error)
 	GetClusterByID(ctx context.Context, id string) (model.Cluster, error)
 	ListActiveIgnoreRulesForAnalysis(ctx context.Context, workspaceID, applicationID string) ([]model.IgnoreRule, error)
-	CreateDesiredSnapshot(ctx context.Context, params storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error)
-	CreateLiveSnapshot(ctx context.Context, params storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error)
-	CreateIncident(ctx context.Context, params storage.CreateIncidentParams) (model.DriftIncident, error)
-	CreateDriftField(ctx context.Context, params storage.CreateDriftFieldParams) (model.DriftField, error)
-	CreateEvidenceRecord(ctx context.Context, params storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error)
-	CreateSuppressedFinding(ctx context.Context, params storage.CreateSuppressedFindingParams) (model.SuppressedFinding, error)
+	WithTx(ctx context.Context, fn func(q storage.Querier) error) error
+	CreateDesiredSnapshotWithQuerier(ctx context.Context, q storage.Querier, params storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error)
+	CreateLiveSnapshotWithQuerier(ctx context.Context, q storage.Querier, params storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error)
+	UpsertIncident(ctx context.Context, q storage.Querier, params storage.UpsertIncidentParams) (model.DriftIncident, error)
+	CreateEvidenceRecordWithQuerier(ctx context.Context, q storage.Querier, params storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error)
+	CreateSuppressedFindingWithQuerier(ctx context.Context, q storage.Querier, params storage.CreateSuppressedFindingParams) (model.SuppressedFinding, error)
 	InsertGitHubEvent(ctx context.Context, params storage.UpsertGitHubEventParams) (model.GitHubEvent, error)
 }
 
@@ -44,8 +44,8 @@ type Processor struct {
 	diffEngine      diff.Engine
 	grouper         incidents.Grouper
 	attributor      evidence.Attributor
-	recommendation  scoring.Recommendation
 	ignoreEvaluator ignorerules.Evaluator
+	recommendation  scoring.Recommendation
 	logger          *slog.Logger
 }
 
@@ -152,23 +152,6 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 		return fmt.Errorf("render live snapshot: %w", err)
 	}
 
-	desiredSnapshot, err := p.store.CreateDesiredSnapshot(ctx, storage.CreateDesiredSnapshotParams{
-		ApplicationID: app.ID,
-		Revision:      desiredState.Revision,
-		SummaryJSON:   desiredJSON,
-	})
-	if err != nil {
-		return fmt.Errorf("create desired snapshot: %w", err)
-	}
-
-	liveSnapshot, err := p.store.CreateLiveSnapshot(ctx, storage.CreateLiveSnapshotParams{
-		ApplicationID: app.ID,
-		SummaryJSON:   liveJSON,
-	})
-	if err != nil {
-		return fmt.Errorf("create live snapshot: %w", err)
-	}
-
 	findings, err := p.diffEngine.Compare(ctx, app, normalizedDesired, normalizedLive)
 	if err != nil {
 		return fmt.Errorf("run diff engine: %w", err)
@@ -197,96 +180,111 @@ func (p *Processor) processAnalyze(ctx context.Context, msg Message) error {
 		LiveSummary:     liveState.Summary,
 	}
 
-	for _, candidate := range candidates {
-		rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.ResourceRef, candidate.FieldPath)
-		if ignored {
-			_, err = p.store.CreateSuppressedFinding(ctx, storage.CreateSuppressedFindingParams{
+	// Use a transaction to ensure atomic persistence of all analysis results
+	return p.store.WithTx(ctx, func(q storage.Querier) error {
+		desiredSnapshot, err := p.store.CreateDesiredSnapshotWithQuerier(ctx, q, storage.CreateDesiredSnapshotParams{
+			ApplicationID: app.ID,
+			Revision:      desiredState.Revision,
+			SummaryJSON:   desiredJSON,
+		})
+		if err != nil {
+			return fmt.Errorf("create desired snapshot: %w", err)
+		}
+
+		liveSnapshot, err := p.store.CreateLiveSnapshotWithQuerier(ctx, q, storage.CreateLiveSnapshotParams{
+			ApplicationID: app.ID,
+			SummaryJSON:   liveJSON,
+		})
+		if err != nil {
+			return fmt.Errorf("create live snapshot: %w", err)
+		}
+
+		for _, candidate := range candidates {
+			rule, ignored := p.ignoreEvaluator.FindMatch(rules, candidate.ResourceRef, candidate.FieldPath)
+			if ignored {
+				_, err = p.store.CreateSuppressedFindingWithQuerier(ctx, q, storage.CreateSuppressedFindingParams{
+					ApplicationID:     app.ID,
+					DesiredSnapshotID: desiredSnapshot.ID,
+					LiveSnapshotID:    liveSnapshot.ID,
+					IgnoreRuleID:      rule.ID,
+					IgnoreRuleName:    rule.Name,
+					IgnoreRuleReason:  rule.Reason,
+					Title:             candidate.Title,
+					Category:          candidate.Category,
+					Severity:          candidate.Severity,
+					ResourceRef:       candidate.ResourceRef,
+					FieldPath:         candidate.FieldPath,
+					DesiredValue:      candidate.DesiredValue,
+					LiveValue:         candidate.LiveValue,
+					DifferenceType:    candidate.DifferenceType,
+				})
+				if err != nil {
+					return fmt.Errorf("create suppressed finding: %w", err)
+				}
+				p.logger.Info(
+					"candidate ignored by rule",
+					"application_id", app.ID,
+					"field_path", candidate.FieldPath,
+					"ignore_rule_id", rule.ID,
+					"ignore_rule_name", rule.Name,
+					"reason", rule.Reason,
+				)
+				continue
+			}
+
+			action, scoredConfidence, err := p.recommendation.Recommend(ctx, candidate)
+			if err != nil {
+				return fmt.Errorf("recommend action: %w", err)
+			}
+
+			// Upsert logic handles de-duplication: updating existing open incidents
+			// instead of creating new ones for the same drift.
+			incident, err := p.store.UpsertIncident(ctx, q, storage.UpsertIncidentParams{
 				ApplicationID:     app.ID,
 				DesiredSnapshotID: desiredSnapshot.ID,
 				LiveSnapshotID:    liveSnapshot.ID,
-				IgnoreRuleID:      rule.ID,
-				IgnoreRuleName:    rule.Name,
-				IgnoreRuleReason:  rule.Reason,
-				Title:             candidate.Title,
-				Category:          candidate.Category,
-				Severity:          candidate.Severity,
-				ResourceRef:       candidate.ResourceRef,
-				FieldPath:         candidate.FieldPath,
-				DesiredValue:      candidate.DesiredValue,
-				LiveValue:         candidate.LiveValue,
-				DifferenceType:    candidate.DifferenceType,
+				RecommendedAction: action,
+				Finding: storage.DriftFinding{
+					Title:          candidate.Title,
+					Category:       candidate.Category,
+					Severity:       candidate.Severity,
+					Confidence:     scoredConfidence,
+					ResourceRef:    candidate.ResourceRef,
+					FieldPath:      candidate.FieldPath,
+					DesiredValue:   candidate.DesiredValue,
+					LiveValue:      candidate.LiveValue,
+					DifferenceType: candidate.DifferenceType,
+				},
 			})
 			if err != nil {
-				return fmt.Errorf("create suppressed finding: %w", err)
+				return fmt.Errorf("upsert incident: %w", err)
 			}
-			p.logger.Info(
-				"candidate ignored by rule",
-				"application_id", app.ID,
-				"field_path", candidate.FieldPath,
-				"ignore_rule_id", rule.ID,
-				"ignore_rule_name", rule.Name,
-				"reason", rule.Reason,
-			)
-			continue
-		}
 
-		action, scoredConfidence, err := p.recommendation.Recommend(ctx, candidate)
-		if err != nil {
-			return fmt.Errorf("recommend action: %w", err)
-		}
-
-		incident, err := p.store.CreateIncident(ctx, storage.CreateIncidentParams{
-			ApplicationID:     app.ID,
-			DesiredSnapshotID: desiredSnapshot.ID,
-			LiveSnapshotID:    liveSnapshot.ID,
-			Title:             candidate.Title,
-			Category:          candidate.Category,
-			Severity:          candidate.Severity,
-			Confidence:        scoredConfidence,
-			RecommendedAction: action,
-			Status:            "open",
-		})
-		if err != nil {
-			return fmt.Errorf("create incident: %w", err)
-		}
-
-		_, err = p.store.CreateDriftField(ctx, storage.CreateDriftFieldParams{
-			IncidentID:     incident.ID,
-			ResourceRef:    candidate.ResourceRef,
-			FieldPath:      candidate.FieldPath,
-			DesiredValue:   candidate.DesiredValue,
-			LiveValue:      candidate.LiveValue,
-			DifferenceType: candidate.DifferenceType,
-		})
-		if err != nil {
-			return fmt.Errorf("create drift field: %w", err)
-		}
-
-		attributions, err := p.attributor.BuildAttributions(ctx, attributionContext, candidate)
-		if err != nil {
-			return fmt.Errorf("build attribution: %w", err)
-		}
-
-		for _, attribution := range attributions {
-			metadataJSON, err := render.JSON(attribution.Metadata)
+			attributions, err := p.attributor.BuildAttributions(ctx, attributionContext, candidate)
 			if err != nil {
-				return fmt.Errorf("marshal attribution metadata: %w", err)
+				return fmt.Errorf("build attribution: %w", err)
 			}
-			_, err = p.store.CreateEvidenceRecord(ctx, storage.CreateEvidenceRecordParams{
-				IncidentID: incident.ID,
-				Source:     attribution.Source,
-				Detail:     attribution.Detail,
-				Actor:      attribution.Actor,
-				Confidence: attribution.Confidence,
-				Metadata:   metadataJSON,
-			})
-			if err != nil {
-				return fmt.Errorf("create evidence record: %w", err)
+
+			for _, attribution := range attributions {
+				metadataJSON, err := render.JSON(attribution.Metadata)
+				if err != nil {
+					return fmt.Errorf("marshal attribution metadata: %w", err)
+				}
+				_, err = p.store.CreateEvidenceRecordWithQuerier(ctx, q, storage.CreateEvidenceRecordParams{
+					IncidentID: incident.ID,
+					Source:     attribution.Source,
+					Detail:     attribution.Detail,
+					Actor:      attribution.Actor,
+					Confidence: attribution.Confidence,
+					Metadata:   metadataJSON,
+				})
+				if err != nil {
+					return fmt.Errorf("create evidence record: %w", err)
+				}
 			}
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 func (p *Processor) processGitHubEvent(ctx context.Context, msg Message) error {
