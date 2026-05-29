@@ -11,6 +11,10 @@ import (
 )
 
 func (r *Repository) CreateSuppressedFinding(ctx context.Context, params CreateSuppressedFindingParams) (model.SuppressedFinding, error) {
+	return r.CreateSuppressedFindingWithQuerier(ctx, r.pool, params)
+}
+
+func (r *Repository) CreateSuppressedFindingWithQuerier(ctx context.Context, q Querier, params CreateSuppressedFindingParams) (model.SuppressedFinding, error) {
 	const query = `
 		INSERT INTO suppressed_findings (
 			id, application_id, desired_snapshot_id, live_snapshot_id, ignore_rule_id,
@@ -25,7 +29,7 @@ func (r *Repository) CreateSuppressedFinding(ctx context.Context, params CreateS
 	`
 
 	var record model.SuppressedFinding
-	err := r.pool.QueryRow(
+	err := q.QueryRow(
 		ctx,
 		query,
 		uuid.NewString(),

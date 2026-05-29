@@ -217,31 +217,31 @@ func (s *ignoreRuleAnalysisStore) ListActiveIgnoreRulesForAnalysis(_ context.Con
 	return s.rules, nil
 }
 
-func (s *ignoreRuleAnalysisStore) CreateDesiredSnapshot(context.Context, storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error) {
+func (*ignoreRuleAnalysisStore) WithTx(_ context.Context, fn func(storage.Querier) error) error {
+	return fn(nil)
+}
+
+func (s *ignoreRuleAnalysisStore) CreateDesiredSnapshotWithQuerier(ctx context.Context, _ storage.Querier, params storage.CreateDesiredSnapshotParams) (model.DesiredSnapshot, error) {
 	s.desiredSnapshotsCreated++
 	return model.DesiredSnapshot{ID: "desired-1"}, nil
 }
 
-func (s *ignoreRuleAnalysisStore) CreateLiveSnapshot(context.Context, storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error) {
+func (s *ignoreRuleAnalysisStore) CreateLiveSnapshotWithQuerier(ctx context.Context, _ storage.Querier, params storage.CreateLiveSnapshotParams) (model.LiveSnapshot, error) {
 	s.liveSnapshotsCreated++
 	return model.LiveSnapshot{ID: "live-1"}, nil
 }
 
-func (s *ignoreRuleAnalysisStore) CreateIncident(context.Context, storage.CreateIncidentParams) (model.DriftIncident, error) {
+func (s *ignoreRuleAnalysisStore) UpsertIncident(ctx context.Context, _ storage.Querier, params storage.UpsertIncidentParams) (model.DriftIncident, error) {
 	s.incidentsCreated++
 	return model.DriftIncident{ID: "incident-1"}, nil
 }
 
-func (*ignoreRuleAnalysisStore) CreateDriftField(context.Context, storage.CreateDriftFieldParams) (model.DriftField, error) {
-	return model.DriftField{}, nil
-}
-
-func (s *ignoreRuleAnalysisStore) CreateEvidenceRecord(_ context.Context, params storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
+func (s *ignoreRuleAnalysisStore) CreateEvidenceRecordWithQuerier(ctx context.Context, _ storage.Querier, params storage.CreateEvidenceRecordParams) (model.EvidenceRecord, error) {
 	s.evidenceRecords = append(s.evidenceRecords, params)
 	return model.EvidenceRecord{}, nil
 }
 
-func (s *ignoreRuleAnalysisStore) CreateSuppressedFinding(_ context.Context, params storage.CreateSuppressedFindingParams) (model.SuppressedFinding, error) {
+func (s *ignoreRuleAnalysisStore) CreateSuppressedFindingWithQuerier(ctx context.Context, _ storage.Querier, params storage.CreateSuppressedFindingParams) (model.SuppressedFinding, error) {
 	if s.suppressionErr != nil {
 		return model.SuppressedFinding{}, s.suppressionErr
 	}
