@@ -1,15 +1,15 @@
 module github.com/AnouarMohamed/StateSight
 
-go 1.25.10
+go 1.26.0
 
 require (
 	github.com/coreos/go-oidc/v3 v3.18.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/redis/go-redis/v9 v9.19.0
+	github.com/redis/go-redis/v9 v9.20.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/apimachinery v0.35.5
+	k8s.io/apimachinery v0.36.1
 )
 
 require (
