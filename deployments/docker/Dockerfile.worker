@@ -1,4 +1,4 @@
-FROM golang:1.26.3-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d AS build
+FROM golang:1.26.4-alpine@sha256:f23e8b227fb4493eabe03bede4d5a32d04092da71962f1fb79b5f7d1e6c2a17f AS build
 WORKDIR /src
 
 COPY go.mod go.sum* ./
@@ -10,7 +10,7 @@ RUN --mount=type=cache,id=statesight-go-mod-v1,target=/go/pkg/mod \
     --mount=type=cache,id=statesight-go-build-v1,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/worker ./apps/worker
 
-FROM golang:1.26.3-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d AS kubectl-build
+FROM golang:1.26.4-alpine@sha256:f23e8b227fb4493eabe03bede4d5a32d04092da71962f1fb79b5f7d1e6c2a17f AS kubectl-build
 ARG KUBECTL_VERSION=v1.34.8
 ARG KUBERNETES_GIT_COMMIT=1f328c5e9dd683d0c5e69f3d7d58f8371278dec2
 ARG KUBERNETES_SRC_SHA256=3dcb409fd2c0d99535293e7f4e3c66f3e386488129079e7d10d55667a14c1bca
